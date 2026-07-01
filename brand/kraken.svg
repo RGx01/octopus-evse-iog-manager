@@ -1,0 +1,66 @@
+<svg width="512" height="512" viewBox="0 0 512 512" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="reach" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#FF7EC7"/>
+      <stop offset="50%" stop-color="#F53DA0"/>
+      <stop offset="100%" stop-color="#D01A80"/>
+    </linearGradient>
+    <radialGradient id="connector" cx="42%" cy="26%" r="78%">
+      <stop offset="0%" stop-color="#FF9BD6"/>
+      <stop offset="52%" stop-color="#EC2E96"/>
+      <stop offset="100%" stop-color="#A81368"/>
+    </radialGradient>
+    <linearGradient id="pin" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#FFF0F8"/>
+      <stop offset="100%" stop-color="#FFC9E8"/>
+    </linearGradient>
+  </defs>
+
+  <!-- ===== Pink octopus tentacle — curls from top-left and flows straight into the
+             connector's base. The path END sits at the connector neck (300,300). ===== -->
+  <g>
+    <path d="M120 92
+             C172 124 196 182 186 242
+             C176 300 138 330 150 384
+             C160 432 210 448 262 372
+             C280 345 292 322 300 300"
+          fill="none" stroke="url(#reach)" stroke-width="56" stroke-linecap="round"/>
+    <g fill="#FFB3E0" opacity="0.92">
+      <circle cx="168" cy="148" r="9"/>
+      <circle cx="186" cy="202" r="9.5"/>
+      <circle cx="178" cy="258" r="9.5"/>
+      <circle cx="160" cy="312" r="9.5"/>
+      <circle cx="166" cy="366" r="9"/>
+      <circle cx="212" cy="404" r="8.5"/>
+    </g>
+  </g>
+
+  <!-- ===== Type 2 EV connector — sits directly on the tentacle tip, no gap ===== -->
+  <!-- Positioned so its neck/base overlaps the tentacle end at (300,300). -->
+  <g transform="translate(300,250)">
+    <!-- neck: fat rounded stub blending the tentacle into the connector body -->
+    <rect x="-34" y="20" width="68" height="80" rx="30" fill="url(#reach)"/>
+    <!-- outer body: FLAT top edge, curved bottom -->
+    <path d="M-82 -8
+             a82 82 0 0 1 164 0
+             L82 8
+             a82 74 0 0 1 -164 0
+             Z"
+          fill="url(#connector)" stroke="#8E115A" stroke-width="6"/>
+    <!-- inner recessed face -->
+    <path d="M-63 -3
+             a63 63 0 0 1 126 0
+             L63 8
+             a63 57 0 0 1 -126 0
+             Z"
+          fill="#B31674"/>
+    <!-- 7 pins -->
+    <circle cx="-29" cy="-16" r="16" fill="url(#pin)" stroke="#8E115A" stroke-width="3"/>
+    <circle cx="29" cy="-16" r="16" fill="url(#pin)" stroke="#8E115A" stroke-width="3"/>
+    <circle cx="-44" cy="18" r="12" fill="url(#pin)" stroke="#8E115A" stroke-width="3"/>
+    <circle cx="44" cy="18" r="12" fill="url(#pin)" stroke="#8E115A" stroke-width="3"/>
+    <circle cx="0" cy="10" r="14" fill="url(#pin)" stroke="#8E115A" stroke-width="3"/>
+    <circle cx="-18" cy="42" r="8" fill="url(#pin)" stroke="#8E115A" stroke-width="2.5"/>
+    <circle cx="18" cy="42" r="8" fill="url(#pin)" stroke="#8E115A" stroke-width="2.5"/>
+  </g>
+</svg>

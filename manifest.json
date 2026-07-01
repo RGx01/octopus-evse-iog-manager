@@ -1,7 +1,7 @@
 {
   "domain": "octopus_evse_iog_manager",
   "name": "Octopus EVSE IOG Manager",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "documentation": "https://github.com/RGx01/octopus-evse-iog-manager",
   "issue_tracker": "https://github.com/RGx01/octopus-evse-iog-manager/issues",
   "dependencies": [],
