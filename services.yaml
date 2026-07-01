@@ -1,0 +1,7 @@
+recalculate:
+  name: Recalculate IOG Target
+  description: >
+    Force an immediate recalculation of the Octopus Intelligent Go charge target
+    based on the current SoC of all plugged-in vehicles. The result is written
+    directly to the Octopus Energy integration's charge target number entity.
+  fields: {}
