@@ -1,6 +1,6 @@
 # Octopus EVSE IOG Manager
 
-<img src="logo/logo.png" align="right" width="140" alt="Octopus EVSE IOG Manager logo">
+<img src="https://raw.githubusercontent.com/RGx01/octopus-evse-iog-manager/main/custom_components/octopus_evse_iog_manager/brand/icon.png" align="right" width="120" alt="Octopus EVSE IOG Manager logo">
 
 A Home Assistant custom integration that **automatically sets the correct Intelligent Charge Target** on Octopus Energy's Intelligent Go (IOG) tariff — so whichever EV is plugged into your charger reaches your desired state of charge by the ready time, without manual fiddling.
 
