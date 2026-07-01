@@ -5,6 +5,15 @@ All notable changes to this project are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.1.1] - 2026-07-01
+
+### Fixed
+- **Octopus charge target entity is now auto-discovered** by pattern
+  (`number.octopus_energy_*_intelligent_charge_target`) instead of a fixed name.
+  The real entity contains an account-specific segment, so the previous
+  hardcoded name did not match on most setups and live mode would silently write
+  nothing. Warns if more than one match is found (multiple accounts).
+
 ## [1.1.0] - 2026-07-01
 
 First public release.
@@ -36,4 +45,5 @@ First public release.
 - Home Assistant 2026.3 or newer.
 - The Octopus Energy integration on an active Intelligent Go tariff.
 
+[1.1.1]: https://github.com/RGx01/octopus-evse-iog-manager/releases/tag/v1.1.1
 [1.1.0]: https://github.com/RGx01/octopus-evse-iog-manager/releases/tag/v1.1.0
