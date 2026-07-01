@@ -1,0 +1,102 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Octopus EVSE IOG Manager — Global Settings",
+        "description": "Configure global charging settings.",
+        "data": {
+          "registered_battery_kwh": "Registered EV battery size (kWh)",
+          "charging_loss_percent": "Charging loss (%)",
+          "plug_stabilisation_delay": "Plug-in stabilisation delay (minutes)",
+          "dry_run": "Dry run mode (calculate only — do not write to Octopus)"
+        },
+        "data_description": {
+          "registered_battery_kwh": "The battery size Octopus has on record for your Intelligent Go tariff/EVSE. This is used as the reference for scaling charge targets when a different vehicle is plugged in. Check your Octopus account if unsure.",
+          "charging_loss_percent": "Typical round-trip AC charging loss (default 10%). Used for informational energy sensors only — does not affect the charge target.",
+          "plug_stabilisation_delay": "How long to wait after a vehicle is detected as plugged in before reading its SoC and setting the charge target. Increase this if your car integration is slow to report a fresh SoC after plug-in.",
+          "dry_run": "When enabled, the integration calculates the correct target % and logs it, but does not write it to the Octopus Energy integration. Use this to validate the maths before going live."
+        }
+      },
+      "vehicle": {
+        "title": "Add Vehicle",
+        "description": "Enter details for vehicle #{vehicle_number}.",
+        "data": {
+          "vehicle_name": "Vehicle name",
+          "vehicle_battery_kwh": "Usable battery capacity (kWh)",
+          "vehicle_soc_sensor": "State of Charge (SoC) sensor",
+          "vehicle_plug_sensor": "Plug / charger connected sensor"
+        },
+        "data_description": {
+          "vehicle_name": "A friendly name for this vehicle (e.g. 'Ariya').",
+          "vehicle_battery_kwh": "The usable (not gross) battery capacity in kWh. Check your vehicle manual.",
+          "vehicle_soc_sensor": "Optional. A sensor reporting battery % (0–100), device_class: battery. Leave blank to enter SoC manually via a slider.",
+          "vehicle_plug_sensor": "Optional. A binary_sensor/switch/input_boolean that is ON when plugged in. Leave blank to use the manual 'Plugged In' switch instead."
+        }
+      },
+      "add_another": {
+        "title": "Add Another Vehicle?",
+        "description": "You have added {count} vehicle(s). Add another?",
+        "data": {
+          "add_another": "Add another vehicle"
+        }
+      }
+    },
+    "abort": {
+      "already_configured": "Octopus EVSE IOG Manager is already configured. Use the Options flow to make changes."
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Global Settings",
+        "data": {
+          "registered_battery_kwh": "Registered EV battery size (kWh)",
+          "charging_loss_percent": "Charging loss (%)",
+          "plug_stabilisation_delay": "Plug-in stabilisation delay (minutes)",
+          "dry_run": "Dry run mode (calculate only — do not write to Octopus)"
+        },
+        "data_description": {
+          "registered_battery_kwh": "The battery size Octopus has on record for your Intelligent Go tariff/EVSE."
+        }
+      },
+      "manage_vehicles": {
+        "title": "Manage Vehicles",
+        "description": "{vehicle_list}",
+        "data": {
+          "action": "What would you like to do?"
+        }
+      },
+      "vehicle": {
+        "title": "Add Vehicle #{vehicle_number}",
+        "data": {
+          "vehicle_name": "Vehicle name",
+          "vehicle_battery_kwh": "Usable battery capacity (kWh)",
+          "vehicle_soc_sensor": "State of Charge (SoC) sensor",
+          "vehicle_plug_sensor": "Plug / charger connected sensor"
+        }
+      },
+      "remove_vehicle": {
+        "title": "Remove Vehicle",
+        "description": "{note}",
+        "data": {
+          "vehicle_to_remove": "Select vehicle to remove"
+        }
+      }
+    }
+  },
+  "selector": {
+    "vehicle_action": {
+      "options": {
+        "add": "Add another vehicle",
+        "remove": "Remove a vehicle",
+        "done": "Finished — save settings"
+      }
+    }
+  },
+  "services": {
+    "recalculate": {
+      "name": "Recalculate",
+      "description": "Force an immediate recalculation of the IOG charge target for all vehicles currently locked in (target already set), resetting them to the waiting state."
+    }
+  }
+}

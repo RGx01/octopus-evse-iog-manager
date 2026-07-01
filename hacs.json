@@ -1,0 +1,5 @@
+{
+  "name": "Octopus EVSE IOG Manager",
+  "render_readme": true,
+  "homeassistant": "2026.3.0"
+}
