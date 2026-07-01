@@ -50,6 +50,8 @@ from .const import (
     DEFAULT_PLUG_STABILISATION_DELAY,
     DEFAULT_REGISTERED_BATTERY_KWH,
     DOMAIN,
+    IOG_TARGET_ENTITY_PREFIX,
+    IOG_TARGET_ENTITY_SUFFIX,
     IOG_TARGET_SOC_ENTITY,
     SCAN_INTERVAL_SECONDS,
     SIGNAL_MANUAL_PLUG_UPDATED,
@@ -107,6 +109,9 @@ class OctopusIOGCoordinator(DataUpdateCoordinator):
         self._last_calculation: dict | None = None
         self._last_active_vehicle: dict | None = None
         self._last_written_target: int | None = None
+
+        # Cached BCD Octopus target entity id (discovered by pattern match)
+        self._resolved_target_entity: str | None = None
 
         # Per-vehicle computed results { name: {"target": int, "calc": dict} }
         # Continuously refreshed for sensor-SoC vehicles; refreshed on button
@@ -392,27 +397,78 @@ class OctopusIOGCoordinator(DataUpdateCoordinator):
 
         return vehicle_to_action
 
+    def _resolve_iog_target_entity(self) -> str | None:
+        """
+        Find the BottlecapDave Octopus intelligent charge target entity.
+
+        Its real entity_id contains an account-specific segment, e.g.
+        `number.octopus_energy_00000000_..._intelligent_charge_target`, so we
+        match on prefix + suffix rather than a fixed name. The exact legacy
+        name is accepted too. The result is cached once found.
+
+        Returns the entity_id, or None if no match currently exists.
+        """
+        # Return cached match if it still exists
+        if self._resolved_target_entity is not None:
+            if self.hass.states.get(self._resolved_target_entity) is not None:
+                return self._resolved_target_entity
+            # Cached entity vanished (integration reload etc.) — re-resolve
+            self._resolved_target_entity = None
+
+        matches = [
+            state.entity_id
+            for state in self.hass.states.async_all("number")
+            if state.entity_id.startswith(IOG_TARGET_ENTITY_PREFIX)
+            and state.entity_id.endswith(IOG_TARGET_ENTITY_SUFFIX)
+        ]
+
+        if not matches:
+            # Fall back to the exact legacy name if present
+            if self.hass.states.get(IOG_TARGET_SOC_ENTITY) is not None:
+                self._resolved_target_entity = IOG_TARGET_SOC_ENTITY
+                return IOG_TARGET_SOC_ENTITY
+            return None
+
+        if len(matches) > 1:
+            _LOGGER.warning(
+                "Multiple Octopus intelligent charge target entities found (%s). "
+                "Using the first: '%s'. If this is wrong, you likely have more "
+                "than one Octopus account configured.",
+                ", ".join(matches), matches[0],
+            )
+
+        self._resolved_target_entity = matches[0]
+        _LOGGER.debug("Resolved IOG target entity: %s", matches[0])
+        return matches[0]
+
     async def _async_write_iog_target(self, target_percent: int, dry_run: bool) -> None:
+        target_entity = self._resolve_iog_target_entity()
+
         if dry_run:
-            _LOGGER.info("[DRY RUN] Would set IOG charge target to %d%%", target_percent)
+            _LOGGER.info(
+                "[DRY RUN] Would set %s to %d%%",
+                target_entity or "(target entity not found)", target_percent,
+            )
             self._last_written_target = target_percent
             return
 
         if target_percent == self._last_written_target:
             return
 
-        if self.hass.states.get(IOG_TARGET_SOC_ENTITY) is None:
+        if target_entity is None:
             _LOGGER.warning(
-                "IOG target entity '%s' not found — is Octopus Energy installed?",
-                IOG_TARGET_SOC_ENTITY,
+                "No Octopus intelligent charge target entity found "
+                "(looked for %s*%s). Is the Octopus Energy integration installed "
+                "and on an Intelligent Go tariff?",
+                IOG_TARGET_ENTITY_PREFIX, IOG_TARGET_ENTITY_SUFFIX,
             )
             return
 
-        _LOGGER.info("Setting IOG charge target to %d%%", target_percent)
+        _LOGGER.info("Setting %s to %d%%", target_entity, target_percent)
         await self.hass.services.async_call(
             NUMBER_DOMAIN,
             SERVICE_SET_VALUE,
-            {ATTR_ENTITY_ID: IOG_TARGET_SOC_ENTITY, "value": target_percent},
+            {ATTR_ENTITY_ID: target_entity, "value": target_percent},
             blocking=True,
         )
         self._last_written_target = target_percent

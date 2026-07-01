@@ -15,11 +15,15 @@ CONF_VEHICLE_BATTERY_KWH = "vehicle_battery_kwh"
 CONF_VEHICLE_SOC_SENSOR = "vehicle_soc_sensor"
 CONF_VEHICLE_PLUG_SENSOR = "vehicle_plug_sensor"
 
-# Bottlecap Dave / Octopus Energy integration entity IDs
+# Bottlecap Dave / Octopus Energy integration entity discovery.
+# The real entity IDs contain an account-specific segment, e.g.
+#   number.octopus_energy_00000000_..._intelligent_charge_target
+# so we discover them by matching a prefix + suffix rather than a fixed name.
+IOG_TARGET_ENTITY_PREFIX = "number.octopus_energy_"
+IOG_TARGET_ENTITY_SUFFIX = "_intelligent_charge_target"
+
+# Fallback exact name (older/simple setups without the account segment).
 IOG_TARGET_SOC_ENTITY = "number.octopus_energy_intelligent_charge_target"
-IOG_READY_TIME_ENTITY = "sensor.octopus_energy_intelligent_ready_time"
-IOG_PLANNED_DISPATCHES_ENTITY = "sensor.octopus_energy_intelligent_planned_dispatches"
-IOG_SMART_CHARGE_ENTITY = "switch.octopus_energy_intelligent_smart_charge"
 
 # Default values
 DEFAULT_CHARGING_LOSS_PERCENT = 10.0
