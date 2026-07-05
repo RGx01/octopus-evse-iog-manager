@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [1.2.0] - 2026-07-02
 
+> **Upgrading from 1.1.x?** The new per-vehicle options (charging loss, rate-limit
+> SoC and power) won't appear on your existing vehicles automatically. After
+> updating, go to **Settings → Devices & Services → Octopus EVSE IOG Manager →
+> Configure → Edit an existing vehicle** and save each vehicle once to pick up the
+> new fields. Until then, each vehicle uses sensible defaults (10% loss, no taper).
+
 ### Added
 - **Estimated Charging Time sensor** (per vehicle) — estimates wall-clock time
   to reach the desired SoC using a two-phase model: full charger power up to the
