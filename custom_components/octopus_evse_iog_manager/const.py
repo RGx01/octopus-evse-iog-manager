@@ -14,6 +14,10 @@ CONF_VEHICLE_NAME = "vehicle_name"
 CONF_VEHICLE_BATTERY_KWH = "vehicle_battery_kwh"
 CONF_VEHICLE_SOC_SENSOR = "vehicle_soc_sensor"
 CONF_VEHICLE_PLUG_SENSOR = "vehicle_plug_sensor"
+CONF_VEHICLE_CHARGING_LOSS_PERCENT = "vehicle_charging_loss_percent"
+CONF_VEHICLE_RATE_LIMIT_SOC_PERCENT = "vehicle_rate_limit_soc_percent"
+CONF_VEHICLE_RATE_LIMIT_POWER_KW = "vehicle_rate_limit_power_kw"
+CONF_TYPICAL_MAX_CHARGER_POWER_KW = "typical_max_charger_power_kw"
 
 # Bottlecap Dave / Octopus Energy integration entity discovery.
 # The real entity IDs contain an account-specific segment, e.g.
@@ -32,6 +36,9 @@ DEFAULT_MANUAL_SOC_PERCENT = 50.0
 DEFAULT_DRY_RUN = True           # Safe default — calculate only, don't write
 DEFAULT_PLUG_STABILISATION_DELAY = 10  # minutes
 DEFAULT_REGISTERED_BATTERY_KWH = 60.0
+DEFAULT_RATE_LIMIT_SOC_PERCENT = 100.0   # 100 = no taper (rate-limit power disabled)
+DEFAULT_RATE_LIMIT_POWER_KW = 2.9        # only used when knee < 100
+DEFAULT_TYPICAL_MAX_CHARGER_POWER_KW = 7.0
 
 # Polling interval (seconds)
 SCAN_INTERVAL_SECONDS = 30

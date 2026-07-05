@@ -7,6 +7,7 @@ import os
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
 from custom_components.octopus_evse_iog_manager.calculations import (
+    calculate_charging_time,
     calculate_iog_target_percent,
     calculate_required_energy,
     select_active_vehicle,
@@ -146,3 +147,41 @@ class TestSelectActiveVehicle:
         vehicles = [self._make_vehicle("A", None, True), self._make_vehicle("B", 40, True)]
         result = select_active_vehicle(vehicles)
         assert result["name"] == "B"
+
+
+class TestChargingTime:
+    """Two-phase charging time with rate-limit knee and losses."""
+
+    def test_corsa_taper_80_to_100(self):
+        r = calculate_charging_time(50, 80, 100, 7, 10, 95, 2.9)
+        assert abs(r["phase1_hours"] - 1.19) < 0.02
+        assert abs(r["phase2_hours"] - 0.958) < 0.02
+        assert abs(r["total_hours"] - 2.148) < 0.02
+
+    def test_no_taper_default_knee_100(self):
+        r = calculate_charging_time(50, 20, 100, 7, 10, 100, 0)
+        assert r["phase2_hours"] == 0.0
+        assert abs(r["total_hours"] - 6.349) < 0.02
+
+    def test_desired_below_knee_phase1_only(self):
+        r = calculate_charging_time(50, 20, 80, 7, 10, 95, 2.9)
+        assert r["phase2_hours"] == 0.0
+        assert abs(r["phase1_hours"] - 4.762) < 0.02
+
+    def test_current_above_knee_phase2_only(self):
+        r = calculate_charging_time(50, 97, 100, 7, 10, 95, 2.9)
+        assert r["phase1_hours"] == 0.0
+        assert abs(r["phase2_hours"] - 0.575) < 0.02
+
+    def test_already_full_zero(self):
+        r = calculate_charging_time(50, 100, 100, 7, 10, 95, 2.9)
+        assert r["total_hours"] == 0.0
+
+    def test_desired_below_current_zero(self):
+        r = calculate_charging_time(50, 90, 50, 7, 10, 95, 2.9)
+        assert r["total_hours"] == 0.0
+
+    def test_losses_lengthen_time(self):
+        no_loss = calculate_charging_time(50, 0, 100, 7, 0, 100, 0)
+        with_loss = calculate_charging_time(50, 0, 100, 7, 10, 100, 0)
+        assert with_loss["total_hours"] > no_loss["total_hours"]

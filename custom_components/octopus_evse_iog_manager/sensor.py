@@ -45,6 +45,7 @@ async def async_setup_entry(
         entities.append(IOGVehicleSocSensor(coordinator, entry.entry_id, name))
         entities.append(IOGEnergyRequiredSensor(coordinator, entry.entry_id, name))
         entities.append(IOGWouldBeTargetSensor(coordinator, entry.entry_id, name))
+        entities.append(IOGEstimatedChargingTimeSensor(coordinator, entry.entry_id, name))
 
     async_add_entities(entities)
 
@@ -282,4 +283,54 @@ class IOGWouldBeTargetSensor(IOGVehicleBaseSensor):
             "desired_soc_percent": v.get("desired_soc"),
             "registered_battery_kwh": (self.coordinator.data or {}).get("registered_battery_kwh"),
             "note": "What would be written to Octopus. Actual write only happens when plugged in and dry run is off.",
+        }
+
+
+class IOGEstimatedChargingTimeSensor(IOGVehicleBaseSensor):
+    """
+    Estimated wall-clock time to charge this vehicle from its current SoC to
+    its desired SoC.
+
+    Uses a two-phase model: full charger power up to the vehicle's rate-limit
+    knee, then the reduced rate above it, with charging losses lengthening the
+    time. Reported in minutes; hours and per-phase detail are in attributes.
+    """
+
+    _attr_icon = "mdi:clock-outline"
+    _attr_native_unit_of_measurement = UnitOfTime.MINUTES
+    _attr_device_class = SensorDeviceClass.DURATION
+    _attr_state_class = SensorStateClass.MEASUREMENT
+
+    def __init__(self, coordinator: OctopusIOGCoordinator, entry_id: str, vehicle_name: str) -> None:
+        super().__init__(coordinator, entry_id, vehicle_name)
+        self._attr_unique_id = f"{entry_id}_estimated_charging_time_{self._slug}"
+        self._attr_name = "Estimated Charging Time"
+
+    @property
+    def native_value(self) -> float | None:
+        v = self._vehicle_summary()
+        if not v:
+            return None
+        ct = v.get("charge_time") or {}
+        hours = ct.get("total_hours")
+        if hours is None:
+            return None
+        return round(hours * 60.0, 1)
+
+    @property
+    def extra_state_attributes(self) -> dict[str, Any]:
+        v = self._vehicle_summary()
+        if not v:
+            return {}
+        ct = v.get("charge_time") or {}
+        knee = ct.get("knee_soc_percent")
+        tapered = knee is not None and knee < 100
+        return {
+            "total_hours": ct.get("total_hours"),
+            "phase1_hours_full_power": ct.get("phase1_hours"),
+            "phase2_hours_reduced": ct.get("phase2_hours"),
+            "rate_limit_knee_percent": knee,
+            "rate_limited": tapered,
+            "current_soc_percent": v.get("current_soc"),
+            "desired_soc_percent": v.get("desired_soc"),
         }

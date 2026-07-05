@@ -29,6 +29,7 @@ from homeassistant.helpers.dispatcher import async_dispatcher_send
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
 
 from .calculations import (
+    calculate_charging_time,
     calculate_iog_target_percent,
     calculate_required_energy,
     select_active_vehicle,
@@ -38,9 +39,13 @@ from .const import (
     CONF_DRY_RUN,
     CONF_PLUG_STABILISATION_DELAY,
     CONF_REGISTERED_BATTERY_KWH,
+    CONF_TYPICAL_MAX_CHARGER_POWER_KW,
     CONF_VEHICLE_BATTERY_KWH,
+    CONF_VEHICLE_CHARGING_LOSS_PERCENT,
     CONF_VEHICLE_NAME,
     CONF_VEHICLE_PLUG_SENSOR,
+    CONF_VEHICLE_RATE_LIMIT_POWER_KW,
+    CONF_VEHICLE_RATE_LIMIT_SOC_PERCENT,
     CONF_VEHICLE_SOC_SENSOR,
     CONF_VEHICLES,
     DEFAULT_CHARGING_LOSS_PERCENT,
@@ -48,7 +53,10 @@ from .const import (
     DEFAULT_DRY_RUN,
     DEFAULT_MANUAL_SOC_PERCENT,
     DEFAULT_PLUG_STABILISATION_DELAY,
+    DEFAULT_RATE_LIMIT_POWER_KW,
+    DEFAULT_RATE_LIMIT_SOC_PERCENT,
     DEFAULT_REGISTERED_BATTERY_KWH,
+    DEFAULT_TYPICAL_MAX_CHARGER_POWER_KW,
     DOMAIN,
     IOG_TARGET_ENTITY_PREFIX,
     IOG_TARGET_ENTITY_SUFFIX,
@@ -327,14 +335,30 @@ class OctopusIOGCoordinator(DataUpdateCoordinator):
         return winner
 
     def _build_vehicle_list(self) -> list[dict]:
-        charging_loss = float(
-            self._config.get(CONF_CHARGING_LOSS_PERCENT, DEFAULT_CHARGING_LOSS_PERCENT)
+        charger_power = float(
+            self._config.get(CONF_TYPICAL_MAX_CHARGER_POWER_KW, DEFAULT_TYPICAL_MAX_CHARGER_POWER_KW)
         )
         result = []
         for vcfg in self._config.get(CONF_VEHICLES, []):
             name = vcfg.get(CONF_VEHICLE_NAME, "EV")
             current_soc, soc_source = self._resolve_soc(name)
             plugged_in = self._resolve_plugged_in(name)
+
+            # Per-vehicle charging loss (moved from global in 1.2.0). Fall back
+            # to the old global value if present, then the default, so existing
+            # configs keep working until re-saved.
+            charging_loss = float(
+                vcfg.get(
+                    CONF_VEHICLE_CHARGING_LOSS_PERCENT,
+                    self._config.get(CONF_CHARGING_LOSS_PERCENT, DEFAULT_CHARGING_LOSS_PERCENT),
+                )
+            )
+            rate_limit_soc = float(
+                vcfg.get(CONF_VEHICLE_RATE_LIMIT_SOC_PERCENT, DEFAULT_RATE_LIMIT_SOC_PERCENT)
+            )
+            rate_limit_power = float(
+                vcfg.get(CONF_VEHICLE_RATE_LIMIT_POWER_KW, DEFAULT_RATE_LIMIT_POWER_KW)
+            )
 
             result.append({
                 "name": name,
@@ -344,6 +368,9 @@ class OctopusIOGCoordinator(DataUpdateCoordinator):
                 "plugged_in": plugged_in,
                 "desired_soc": self._desired_soc.get(name, DEFAULT_DESIRED_SOC_PERCENT),
                 "charging_loss": charging_loss,
+                "rate_limit_soc": rate_limit_soc,
+                "rate_limit_power": rate_limit_power,
+                "charger_power": charger_power,
                 "has_soc_sensor": bool(vcfg.get(CONF_VEHICLE_SOC_SENSOR)),
                 "has_plug_sensor": bool(vcfg.get(CONF_VEHICLE_PLUG_SENSOR)),
             })
@@ -513,9 +540,19 @@ class OctopusIOGCoordinator(DataUpdateCoordinator):
                 desired_soc_percent=v["desired_soc"],
                 charging_loss_percent=v["charging_loss"],
             )
+            charge_time = calculate_charging_time(
+                battery_kwh=v["battery_kwh"],
+                current_soc_percent=v["current_soc"],
+                desired_soc_percent=v["desired_soc"],
+                charger_power_kw=v["charger_power"],
+                charging_loss_percent=v["charging_loss"],
+                rate_limit_soc_percent=v["rate_limit_soc"],
+                rate_limit_power_kw=v["rate_limit_power"],
+            )
             self._vehicle_calc[name] = {
                 "target": target,
                 "calc": calc,
+                "charge_time": charge_time,
                 "soc_used": v["current_soc"],
                 "soc_source": v["soc_source"],
             }
@@ -558,6 +595,7 @@ class OctopusIOGCoordinator(DataUpdateCoordinator):
                     "remaining_wait_seconds": remaining_seconds,
                     "would_be_target": calc_cache.get("target"),
                     "calculation": calc_cache.get("calc"),
+                    "charge_time": calc_cache.get("charge_time"),
                 })
 
             # Write to Octopus only when the state machine says a plugged-in
