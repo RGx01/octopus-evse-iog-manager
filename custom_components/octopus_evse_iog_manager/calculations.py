@@ -6,6 +6,94 @@ All functions are pure — no HA dependencies — making them straightforward to
 from __future__ import annotations
 
 
+def calculate_charging_time(
+    battery_kwh: float,
+    current_soc_percent: float,
+    desired_soc_percent: float,
+    charger_power_kw: float,
+    charging_loss_percent: float,
+    rate_limit_soc_percent: float = 100.0,
+    rate_limit_power_kw: float = 0.0,
+) -> dict:
+    """
+    Estimate charging time using a two-phase (single-knee) model.
+
+    Phase 1 — from current SoC up to the rate-limit knee — charges at the
+              charger power.
+    Phase 2 — from the knee up to the desired SoC — charges at the reduced
+              rate_limit_power_kw.
+
+    If rate_limit_soc_percent is 100 (the default), there is no knee: the whole
+    charge happens at charger power and rate_limit_power_kw is ignored.
+
+    Charging losses inflate the grid energy, so the effective energy delivered
+    to the battery per hour is power × (1 − loss), which lengthens the time.
+
+    Returns a dict with total hours, per-phase hours, and the knee used.
+    All times are wall-clock hours to move charge into the battery.
+
+    Args:
+        battery_kwh:             Usable battery capacity of the vehicle.
+        current_soc_percent:     Current SoC (0–100).
+        desired_soc_percent:     Target SoC (0–100).
+        charger_power_kw:        Charger power below the knee (kW).
+        charging_loss_percent:   AC→DC / thermal losses (%).
+        rate_limit_soc_percent:  SoC at which the vehicle tapers (default 100 = no taper).
+        rate_limit_power_kw:     Reduced power above the knee (kW). Ignored if knee is 100.
+    """
+    current = max(0.0, min(100.0, current_soc_percent))
+    desired = max(0.0, min(100.0, desired_soc_percent))
+    knee = max(0.0, min(100.0, rate_limit_soc_percent))
+
+    efficiency = 1.0 - charging_loss_percent / 100.0
+    if efficiency <= 0:
+        efficiency = 1.0  # guard against nonsensical 100% loss
+
+    if desired <= current or battery_kwh <= 0:
+        return {
+            "total_hours": 0.0,
+            "phase1_hours": 0.0,
+            "phase2_hours": 0.0,
+            "knee_soc_percent": round(knee, 1),
+            "phase1_kwh": 0.0,
+            "phase2_kwh": 0.0,
+        }
+
+    def phase_time(soc_from: float, soc_to: float, power_kw: float) -> tuple[float, float]:
+        """Return (hours, battery_kwh) for a SoC span at a given power."""
+        span = max(0.0, soc_to - soc_from)
+        kwh = (span / 100.0) * battery_kwh
+        if power_kw <= 0 or kwh <= 0:
+            return 0.0, kwh
+        # Effective delivered power into the battery after losses
+        hours = kwh / (power_kw * efficiency)
+        return hours, kwh
+
+    # No taper if knee is at/above 100 or at/below current (or reduced power unset)
+    taper_active = knee < 100.0 and rate_limit_power_kw > 0
+
+    if not taper_active:
+        h1, k1 = phase_time(current, desired, charger_power_kw)
+        h2, k2 = 0.0, 0.0
+    else:
+        # Phase 1: current → min(knee, desired) at charger power
+        phase1_end = min(knee, desired)
+        h1, k1 = phase_time(current, phase1_end, charger_power_kw)
+        # Phase 2: max(knee, current) → desired at reduced power (only if desired above knee)
+        phase2_start = max(knee, current)
+        h2, k2 = phase_time(phase2_start, desired, rate_limit_power_kw)
+
+    total = h1 + h2
+    return {
+        "total_hours": round(total, 3),
+        "phase1_hours": round(h1, 3),
+        "phase2_hours": round(h2, 3),
+        "knee_soc_percent": round(knee, 1),
+        "phase1_kwh": round(k1, 3),
+        "phase2_kwh": round(k2, 3),
+    }
+
+
 def calculate_required_energy(
     battery_kwh: float,
     current_soc_percent: float,

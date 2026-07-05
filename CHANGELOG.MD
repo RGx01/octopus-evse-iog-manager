@@ -5,6 +5,30 @@ All notable changes to this project are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.2.0] - 2026-07-02
+
+> **Upgrading from 1.1.x?** The new per-vehicle options (charging loss, rate-limit
+> SoC and power) won't appear on your existing vehicles automatically. After
+> updating, go to **Settings → Devices & Services → Octopus EVSE IOG Manager →
+> Configure → Edit an existing vehicle** and save each vehicle once to pick up the
+> new fields. Until then, each vehicle uses sensible defaults (10% loss, no taper).
+
+### Added
+- **Estimated Charging Time sensor** (per vehicle) — estimates wall-clock time
+  to reach the desired SoC using a two-phase model: full charger power up to the
+  vehicle's rate-limit knee, then the reduced rate above it, with charging losses
+  factored in. Reported in minutes, with hours and per-phase detail in attributes.
+- **Per-vehicle rate-limit modelling** — each vehicle can specify the SoC at which
+  it tapers (e.g. 95%) and the reduced power it limits to (e.g. 2.9 kW). A knee of
+  100% (the default) means no taper and the power field is ignored.
+- **Typical Max Charger Power** global setting (default 7 kW) — the charge rate
+  below the knee.
+
+### Changed
+- **Charging loss is now per-vehicle** rather than a single global value, so each
+  car can have its own efficiency. Existing configs fall back to the old global
+  value until re-saved.
+
 ## [1.1.1] - 2026-07-01
 
 ### Fixed
@@ -45,5 +69,6 @@ First public release.
 - Home Assistant 2026.3 or newer.
 - The Octopus Energy integration on an active Intelligent Go tariff.
 
+[1.2.0]: https://github.com/RGx01/octopus-evse-iog-manager/releases/tag/v1.2.0
 [1.1.1]: https://github.com/RGx01/octopus-evse-iog-manager/releases/tag/v1.1.1
 [1.1.0]: https://github.com/RGx01/octopus-evse-iog-manager/releases/tag/v1.1.0

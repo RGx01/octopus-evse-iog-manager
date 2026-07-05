@@ -6,15 +6,15 @@
         "description": "Configure global charging settings.",
         "data": {
           "registered_battery_kwh": "Registered EV battery size (kWh)",
-          "charging_loss_percent": "Charging loss (%)",
+          "typical_max_charger_power_kw": "Typical max charger power (kW)",
           "plug_stabilisation_delay": "Plug-in stabilisation delay (minutes)",
           "dry_run": "Dry run mode (calculate only — do not write to Octopus)"
         },
         "data_description": {
-          "registered_battery_kwh": "The battery size Octopus has on record for your Intelligent Go tariff/EVSE. This is used as the reference for scaling charge targets when a different vehicle is plugged in. Check your Octopus account if unsure.",
-          "charging_loss_percent": "Typical round-trip AC charging loss (default 10%). Used for informational energy sensors only — does not affect the charge target.",
-          "plug_stabilisation_delay": "How long to wait after a vehicle is detected as plugged in before reading its SoC and setting the charge target. Increase this if your car integration is slow to report a fresh SoC after plug-in.",
-          "dry_run": "When enabled, the integration calculates the correct target % and logs it, but does not write it to the Octopus Energy integration. Use this to validate the maths before going live."
+          "registered_battery_kwh": "The battery size Octopus has on record for your Intelligent Go tariff/EVSE. Used as the reference for scaling charge targets when a different vehicle is plugged in.",
+          "typical_max_charger_power_kw": "Used to calculate the estimated charging time. Set to your charger's typical maximum output (default 7 kW).",
+          "plug_stabilisation_delay": "How long to wait after a vehicle is detected as plugged in before reading its SoC and setting the charge target. Increase if your car integration is slow to report a fresh SoC.",
+          "dry_run": "When enabled, the integration calculates the target % and logs it but does not write to the Octopus Energy integration. Use this to validate before going live."
         }
       },
       "vehicle": {
@@ -23,14 +23,16 @@
         "data": {
           "vehicle_name": "Vehicle name",
           "vehicle_battery_kwh": "Usable battery capacity (kWh)",
+          "vehicle_charging_loss_percent": "Charging loss (%)",
+          "vehicle_rate_limit_soc_percent": "Rate-limit SoC (%)",
+          "vehicle_rate_limit_power_kw": "Rate-limited power (kW)",
           "vehicle_soc_sensor": "State of Charge (SoC) sensor",
           "vehicle_plug_sensor": "Plug / charger connected sensor"
         },
         "data_description": {
-          "vehicle_name": "A friendly name for this vehicle (e.g. 'Ariya').",
-          "vehicle_battery_kwh": "The usable (not gross) battery capacity in kWh. Check your vehicle manual.",
-          "vehicle_soc_sensor": "Optional. A sensor reporting battery % (0–100), device_class: battery. Leave blank to enter SoC manually via a slider.",
-          "vehicle_plug_sensor": "Optional. A binary_sensor/switch/input_boolean that is ON when plugged in. Leave blank to use the manual 'Plugged In' switch instead."
+          "vehicle_charging_loss_percent": "Helps predict the total dispatch and estimate total charging time. Leave at 10% if you're not sure.",
+          "vehicle_rate_limit_soc_percent": "If your car rate-limits near the end of charge, set the SoC where that starts (e.g. 95%). Helps estimate total charging time. Leave at 100% if you don't care about charging-time estimates.",
+          "vehicle_rate_limit_power_kw": "Used only if the rate-limit SoC is below 100%. The reduced power the car pulls above the knee. Helps estimate total charging time."
         }
       },
       "add_another": {
@@ -51,12 +53,15 @@
         "title": "Global Settings",
         "data": {
           "registered_battery_kwh": "Registered EV battery size (kWh)",
-          "charging_loss_percent": "Charging loss (%)",
+          "typical_max_charger_power_kw": "Typical max charger power (kW)",
           "plug_stabilisation_delay": "Plug-in stabilisation delay (minutes)",
           "dry_run": "Dry run mode (calculate only — do not write to Octopus)"
         },
         "data_description": {
-          "registered_battery_kwh": "The battery size Octopus has on record for your Intelligent Go tariff/EVSE."
+          "registered_battery_kwh": "The battery size Octopus has on record for your Intelligent Go tariff/EVSE. Used as the reference for scaling charge targets when a different vehicle is plugged in.",
+          "typical_max_charger_power_kw": "Used to calculate the estimated charging time. Set to your charger's typical maximum output (default 7 kW).",
+          "plug_stabilisation_delay": "How long to wait after a vehicle is detected as plugged in before reading its SoC and setting the charge target. Increase if your car integration is slow to report a fresh SoC.",
+          "dry_run": "When enabled, the integration calculates the target % and logs it but does not write to the Octopus Energy integration. Use this to validate before going live."
         }
       },
       "manage_vehicles": {
@@ -71,8 +76,16 @@
         "data": {
           "vehicle_name": "Vehicle name",
           "vehicle_battery_kwh": "Usable battery capacity (kWh)",
+          "vehicle_charging_loss_percent": "Charging loss (%)",
+          "vehicle_rate_limit_soc_percent": "Rate-limit SoC (%)",
+          "vehicle_rate_limit_power_kw": "Rate-limited power (kW)",
           "vehicle_soc_sensor": "State of Charge (SoC) sensor",
           "vehicle_plug_sensor": "Plug / charger connected sensor"
+        },
+        "data_description": {
+          "vehicle_charging_loss_percent": "Helps predict the total dispatch and estimate total charging time. Leave at 10% if you're not sure.",
+          "vehicle_rate_limit_soc_percent": "If your car rate-limits near the end of charge, set the SoC where that starts (e.g. 95%). Helps estimate total charging time. Leave at 100% if you don't care about charging-time estimates.",
+          "vehicle_rate_limit_power_kw": "Used only if the rate-limit SoC is below 100%. The reduced power the car pulls above the knee. Helps estimate total charging time."
         }
       },
       "remove_vehicle": {
@@ -81,15 +94,40 @@
         "data": {
           "vehicle_to_remove": "Select vehicle to remove"
         }
+      },
+      "edit_vehicle": {
+        "title": "Edit Vehicle",
+        "description": "Editing {vehicle_name}. Review and set any new options, then submit.",
+        "data": {
+          "vehicle_name": "Vehicle name",
+          "vehicle_battery_kwh": "Usable battery capacity (kWh)",
+          "vehicle_charging_loss_percent": "Charging loss (%)",
+          "vehicle_rate_limit_soc_percent": "Rate-limit SoC (%)",
+          "vehicle_rate_limit_power_kw": "Rate-limited power (kW)",
+          "vehicle_soc_sensor": "State of Charge (SoC) sensor",
+          "vehicle_plug_sensor": "Plug / charger connected sensor"
+        },
+        "data_description": {
+          "vehicle_charging_loss_percent": "Helps predict the total dispatch and estimate total charging time. Leave at 10% if you're not sure.",
+          "vehicle_rate_limit_soc_percent": "If your car rate-limits near the end of charge, set the SoC where that starts (e.g. 95%). Helps estimate total charging time. Leave at 100% if you don't care about charging-time estimates.",
+          "vehicle_rate_limit_power_kw": "Used only if the rate-limit SoC is below 100%. The reduced power the car pulls above the knee. Helps estimate total charging time."
+        }
+      },
+      "select_vehicle_to_edit": {
+        "title": "Edit which vehicle?",
+        "data": {
+          "vehicle_to_edit": "Vehicle"
+        }
       }
     }
   },
   "selector": {
     "vehicle_action": {
       "options": {
-        "add": "Add another vehicle",
+        "add": "Add a vehicle",
+        "edit": "Edit an existing vehicle",
         "remove": "Remove a vehicle",
-        "done": "Finished — save settings"
+        "done": "Done — save and exit"
       }
     }
   },

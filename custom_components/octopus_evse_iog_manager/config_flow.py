@@ -11,19 +11,25 @@ from homeassistant.data_entry_flow import FlowResult
 from homeassistant.helpers import selector
 
 from .const import (
-    CONF_CHARGING_LOSS_PERCENT,
     CONF_DRY_RUN,
     CONF_PLUG_STABILISATION_DELAY,
     CONF_REGISTERED_BATTERY_KWH,
+    CONF_TYPICAL_MAX_CHARGER_POWER_KW,
     CONF_VEHICLE_BATTERY_KWH,
+    CONF_VEHICLE_CHARGING_LOSS_PERCENT,
     CONF_VEHICLE_NAME,
     CONF_VEHICLE_PLUG_SENSOR,
+    CONF_VEHICLE_RATE_LIMIT_POWER_KW,
+    CONF_VEHICLE_RATE_LIMIT_SOC_PERCENT,
     CONF_VEHICLE_SOC_SENSOR,
     CONF_VEHICLES,
     DEFAULT_CHARGING_LOSS_PERCENT,
     DEFAULT_DRY_RUN,
     DEFAULT_PLUG_STABILISATION_DELAY,
+    DEFAULT_RATE_LIMIT_POWER_KW,
+    DEFAULT_RATE_LIMIT_SOC_PERCENT,
     DEFAULT_REGISTERED_BATTERY_KWH,
+    DEFAULT_TYPICAL_MAX_CHARGER_POWER_KW,
     DOMAIN,
 )
 
@@ -39,10 +45,10 @@ def _build_global_schema(defaults: dict = {}) -> vol.Schema:
             selector.NumberSelectorConfig(min=10, max=200, step=0.5, unit_of_measurement="kWh")
         ),
         vol.Required(
-            CONF_CHARGING_LOSS_PERCENT,
-            default=defaults.get(CONF_CHARGING_LOSS_PERCENT, DEFAULT_CHARGING_LOSS_PERCENT),
+            CONF_TYPICAL_MAX_CHARGER_POWER_KW,
+            default=defaults.get(CONF_TYPICAL_MAX_CHARGER_POWER_KW, DEFAULT_TYPICAL_MAX_CHARGER_POWER_KW),
         ): selector.NumberSelector(
-            selector.NumberSelectorConfig(min=0, max=30, step=0.5, unit_of_measurement="%")
+            selector.NumberSelectorConfig(min=1, max=50, step=0.1, unit_of_measurement="kW")
         ),
         vol.Required(
             CONF_PLUG_STABILISATION_DELAY,
@@ -68,6 +74,24 @@ def _build_vehicle_schema(defaults: dict = {}) -> vol.Schema:
             default=defaults.get(CONF_VEHICLE_BATTERY_KWH, 60),
         ): selector.NumberSelector(
             selector.NumberSelectorConfig(min=10, max=200, step=0.5, unit_of_measurement="kWh")
+        ),
+        vol.Required(
+            CONF_VEHICLE_CHARGING_LOSS_PERCENT,
+            default=defaults.get(CONF_VEHICLE_CHARGING_LOSS_PERCENT, DEFAULT_CHARGING_LOSS_PERCENT),
+        ): selector.NumberSelector(
+            selector.NumberSelectorConfig(min=0, max=30, step=0.5, unit_of_measurement="%")
+        ),
+        vol.Required(
+            CONF_VEHICLE_RATE_LIMIT_SOC_PERCENT,
+            default=defaults.get(CONF_VEHICLE_RATE_LIMIT_SOC_PERCENT, DEFAULT_RATE_LIMIT_SOC_PERCENT),
+        ): selector.NumberSelector(
+            selector.NumberSelectorConfig(min=10, max=100, step=1, unit_of_measurement="%")
+        ),
+        vol.Optional(
+            CONF_VEHICLE_RATE_LIMIT_POWER_KW,
+            default=defaults.get(CONF_VEHICLE_RATE_LIMIT_POWER_KW, DEFAULT_RATE_LIMIT_POWER_KW),
+        ): selector.NumberSelector(
+            selector.NumberSelectorConfig(min=0.5, max=50, step=0.1, unit_of_measurement="kW")
         ),
     }
 
@@ -158,6 +182,7 @@ class OctopusIOGManagerOptionsFlow(config_entries.OptionsFlow):
         self._config_entry = config_entry
         self._global_config: dict[str, Any] = {}
         self._vehicles: list[dict[str, Any]] = list(config_entry.data.get(CONF_VEHICLES, []))
+        self._editing_vehicle_index: int | None = None
 
     async def async_step_init(self, user_input: dict | None = None) -> FlowResult:
         current = self._config_entry.data
@@ -169,7 +194,7 @@ class OctopusIOGManagerOptionsFlow(config_entries.OptionsFlow):
             step_id="init",
             data_schema=_build_global_schema(defaults={
                 CONF_REGISTERED_BATTERY_KWH: current.get(CONF_REGISTERED_BATTERY_KWH, DEFAULT_REGISTERED_BATTERY_KWH),
-                CONF_CHARGING_LOSS_PERCENT: current.get(CONF_CHARGING_LOSS_PERCENT, DEFAULT_CHARGING_LOSS_PERCENT),
+                CONF_TYPICAL_MAX_CHARGER_POWER_KW: current.get(CONF_TYPICAL_MAX_CHARGER_POWER_KW, DEFAULT_TYPICAL_MAX_CHARGER_POWER_KW),
                 CONF_PLUG_STABILISATION_DELAY: current.get(CONF_PLUG_STABILISATION_DELAY, DEFAULT_PLUG_STABILISATION_DELAY),
                 CONF_DRY_RUN: current.get(CONF_DRY_RUN, DEFAULT_DRY_RUN),
             }),
@@ -180,6 +205,8 @@ class OctopusIOGManagerOptionsFlow(config_entries.OptionsFlow):
             action = user_input.get("action")
             if action == "add":
                 return await self.async_step_vehicle()
+            if action == "edit":
+                return await self.async_step_select_vehicle_to_edit()
             if action == "remove":
                 return await self.async_step_remove_vehicle()
             return self._save()
@@ -187,7 +214,8 @@ class OctopusIOGManagerOptionsFlow(config_entries.OptionsFlow):
         names = [v.get(CONF_VEHICLE_NAME, "Vehicle") for v in self._vehicles]
         options = ["add", "done"]
         if names:
-            options.insert(1, "remove")
+            options.insert(1, "edit")
+            options.insert(2, "remove")
 
         return self.async_show_form(
             step_id="manage_vehicles",
@@ -202,6 +230,49 @@ class OctopusIOGManagerOptionsFlow(config_entries.OptionsFlow):
             description_placeholders={
                 "vehicle_list": f"Configured vehicles: {', '.join(names) or 'None'}.",
             },
+        )
+
+    async def async_step_select_vehicle_to_edit(self, user_input: dict | None = None) -> FlowResult:
+        """Pick which existing vehicle to edit."""
+        names = [v.get(CONF_VEHICLE_NAME, "Vehicle") for v in self._vehicles]
+
+        if user_input is not None:
+            chosen = user_input.get("vehicle_to_edit")
+            # Store the index so a rename during edit doesn't break the match
+            self._editing_vehicle_index = names.index(chosen) if chosen in names else None
+            return await self.async_step_edit_vehicle()
+
+        return self.async_show_form(
+            step_id="select_vehicle_to_edit",
+            data_schema=vol.Schema({
+                vol.Required("vehicle_to_edit"): selector.SelectSelector(
+                    selector.SelectSelectorConfig(options=names)
+                )
+            }),
+        )
+
+    async def async_step_edit_vehicle(self, user_input: dict | None = None) -> FlowResult:
+        """Edit an existing vehicle, pre-filled with its current values.
+
+        On upgrade, vehicles saved before new fields existed simply get the
+        field defaults here, so opening this form is how a user adds the new
+        1.2.0 settings (charging loss, rate-limit knee/power) to an existing car.
+        """
+        idx = self._editing_vehicle_index
+        if idx is None or idx < 0 or idx >= len(self._vehicles):
+            return await self.async_step_manage_vehicles()
+
+        existing = self._vehicles[idx]
+
+        if user_input is not None:
+            # Replace at the same index, preserving list order and allowing rename
+            self._vehicles[idx] = user_input
+            return await self.async_step_manage_vehicles()
+
+        return self.async_show_form(
+            step_id="edit_vehicle",
+            data_schema=_build_vehicle_schema(defaults=existing),
+            description_placeholders={"vehicle_name": existing.get(CONF_VEHICLE_NAME, "")},
         )
 
     async def async_step_vehicle(self, user_input: dict | None = None) -> FlowResult:
