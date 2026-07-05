@@ -119,24 +119,15 @@
           "vehicle_to_edit": "Vehicle"
         }
       }
-    },
-    "selector": {
-      "vehicle_action": {
-        "options": {
-          "add": "Add a vehicle",
-          "edit": "Edit an existing vehicle",
-          "remove": "Remove a vehicle",
-          "done": "Done — save and exit"
-        }
-      }
     }
   },
   "selector": {
     "vehicle_action": {
       "options": {
-        "add": "Add another vehicle",
+        "add": "Add a vehicle",
+        "edit": "Edit an existing vehicle",
         "remove": "Remove a vehicle",
-        "done": "Finished — save settings"
+        "done": "Done — save and exit"
       }
     }
   },
