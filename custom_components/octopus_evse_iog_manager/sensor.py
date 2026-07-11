@@ -293,21 +293,32 @@ class IOGEstimatedChargingTimeSensor(IOGVehicleBaseSensor):
 
     Uses a two-phase model: full charger power up to the vehicle's rate-limit
     knee, then the reduced rate above it, with charging losses lengthening the
-    time. Reported in minutes; hours and per-phase detail are in attributes.
+    time. The state is a human-readable "Hh Mm Ss" string; numeric forms (total
+    seconds/minutes/hours) and per-phase detail are in the attributes for use in
+    automations and graphs.
     """
 
     _attr_icon = "mdi:clock-outline"
-    _attr_native_unit_of_measurement = UnitOfTime.MINUTES
-    _attr_device_class = SensorDeviceClass.DURATION
-    _attr_state_class = SensorStateClass.MEASUREMENT
 
     def __init__(self, coordinator: OctopusIOGCoordinator, entry_id: str, vehicle_name: str) -> None:
         super().__init__(coordinator, entry_id, vehicle_name)
         self._attr_unique_id = f"{entry_id}_estimated_charging_time_{self._slug}"
         self._attr_name = "Estimated Charging Time"
 
+    @staticmethod
+    def _format_hms(total_hours: float) -> str:
+        """Format decimal hours as 'Hh Mm Ss' (omitting leading zero units)."""
+        total_seconds = int(round(total_hours * 3600))
+        h, rem = divmod(total_seconds, 3600)
+        m, s = divmod(rem, 60)
+        if h > 0:
+            return f"{h}h {m}m {s}s"
+        if m > 0:
+            return f"{m}m {s}s"
+        return f"{s}s"
+
     @property
-    def native_value(self) -> float | None:
+    def native_value(self) -> str | None:
         v = self._vehicle_summary()
         if not v:
             return None
@@ -315,7 +326,7 @@ class IOGEstimatedChargingTimeSensor(IOGVehicleBaseSensor):
         hours = ct.get("total_hours")
         if hours is None:
             return None
-        return round(hours * 60.0, 1)
+        return self._format_hms(hours)
 
     @property
     def extra_state_attributes(self) -> dict[str, Any]:
@@ -323,9 +334,13 @@ class IOGEstimatedChargingTimeSensor(IOGVehicleBaseSensor):
         if not v:
             return {}
         ct = v.get("charge_time") or {}
+        hours = ct.get("total_hours")
         knee = ct.get("knee_soc_percent")
         tapered = knee is not None and knee < 100
+        total_seconds = int(round(hours * 3600)) if hours is not None else None
         return {
+            "total_seconds": total_seconds,
+            "total_minutes": round(hours * 60.0, 1) if hours is not None else None,
             "total_hours": ct.get("total_hours"),
             "phase1_hours_full_power": ct.get("phase1_hours"),
             "phase2_hours_reduced": ct.get("phase2_hours"),
