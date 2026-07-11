@@ -39,9 +39,9 @@ from .const import (
     CONF_DRY_RUN,
     CONF_PLUG_STABILISATION_DELAY,
     CONF_REGISTERED_BATTERY_KWH,
-    CONF_TYPICAL_MAX_CHARGER_POWER_KW,
     CONF_VEHICLE_BATTERY_KWH,
     CONF_VEHICLE_CHARGING_LOSS_PERCENT,
+    CONF_VEHICLE_MAX_CHARGER_POWER_KW,
     CONF_VEHICLE_NAME,
     CONF_VEHICLE_PLUG_SENSOR,
     CONF_VEHICLE_RATE_LIMIT_POWER_KW,
@@ -52,11 +52,11 @@ from .const import (
     DEFAULT_DESIRED_SOC_PERCENT,
     DEFAULT_DRY_RUN,
     DEFAULT_MANUAL_SOC_PERCENT,
+    DEFAULT_MAX_CHARGER_POWER_KW,
     DEFAULT_PLUG_STABILISATION_DELAY,
     DEFAULT_RATE_LIMIT_POWER_KW,
     DEFAULT_RATE_LIMIT_SOC_PERCENT,
     DEFAULT_REGISTERED_BATTERY_KWH,
-    DEFAULT_TYPICAL_MAX_CHARGER_POWER_KW,
     DOMAIN,
     IOG_TARGET_ENTITY_PREFIX,
     IOG_TARGET_ENTITY_SUFFIX,
@@ -335,9 +335,6 @@ class OctopusIOGCoordinator(DataUpdateCoordinator):
         return winner
 
     def _build_vehicle_list(self) -> list[dict]:
-        charger_power = float(
-            self._config.get(CONF_TYPICAL_MAX_CHARGER_POWER_KW, DEFAULT_TYPICAL_MAX_CHARGER_POWER_KW)
-        )
         result = []
         for vcfg in self._config.get(CONF_VEHICLES, []):
             name = vcfg.get(CONF_VEHICLE_NAME, "EV")
@@ -358,6 +355,14 @@ class OctopusIOGCoordinator(DataUpdateCoordinator):
             )
             rate_limit_power = float(
                 vcfg.get(CONF_VEHICLE_RATE_LIMIT_POWER_KW, DEFAULT_RATE_LIMIT_POWER_KW)
+            )
+            # Per-vehicle charger power (moved from global). Fall back to the old
+            # global key, then the default, so pre-1.2.0-final configs still work.
+            charger_power = float(
+                vcfg.get(
+                    CONF_VEHICLE_MAX_CHARGER_POWER_KW,
+                    self._config.get("typical_max_charger_power_kw", DEFAULT_MAX_CHARGER_POWER_KW),
+                )
             )
 
             result.append({

@@ -14,7 +14,7 @@ from .const import (
     CONF_DRY_RUN,
     CONF_PLUG_STABILISATION_DELAY,
     CONF_REGISTERED_BATTERY_KWH,
-    CONF_TYPICAL_MAX_CHARGER_POWER_KW,
+    CONF_VEHICLE_MAX_CHARGER_POWER_KW,
     CONF_VEHICLE_BATTERY_KWH,
     CONF_VEHICLE_CHARGING_LOSS_PERCENT,
     CONF_VEHICLE_NAME,
@@ -29,7 +29,7 @@ from .const import (
     DEFAULT_RATE_LIMIT_POWER_KW,
     DEFAULT_RATE_LIMIT_SOC_PERCENT,
     DEFAULT_REGISTERED_BATTERY_KWH,
-    DEFAULT_TYPICAL_MAX_CHARGER_POWER_KW,
+    DEFAULT_MAX_CHARGER_POWER_KW,
     DOMAIN,
 )
 
@@ -43,12 +43,6 @@ def _build_global_schema(defaults: dict = {}) -> vol.Schema:
             default=defaults.get(CONF_REGISTERED_BATTERY_KWH, DEFAULT_REGISTERED_BATTERY_KWH),
         ): selector.NumberSelector(
             selector.NumberSelectorConfig(min=10, max=200, step=0.5, unit_of_measurement="kWh")
-        ),
-        vol.Required(
-            CONF_TYPICAL_MAX_CHARGER_POWER_KW,
-            default=defaults.get(CONF_TYPICAL_MAX_CHARGER_POWER_KW, DEFAULT_TYPICAL_MAX_CHARGER_POWER_KW),
-        ): selector.NumberSelector(
-            selector.NumberSelectorConfig(min=1, max=50, step=0.1, unit_of_measurement="kW")
         ),
         vol.Required(
             CONF_PLUG_STABILISATION_DELAY,
@@ -74,6 +68,12 @@ def _build_vehicle_schema(defaults: dict = {}) -> vol.Schema:
             default=defaults.get(CONF_VEHICLE_BATTERY_KWH, 60),
         ): selector.NumberSelector(
             selector.NumberSelectorConfig(min=10, max=200, step=0.5, unit_of_measurement="kWh")
+        ),
+        vol.Required(
+            CONF_VEHICLE_MAX_CHARGER_POWER_KW,
+            default=defaults.get(CONF_VEHICLE_MAX_CHARGER_POWER_KW, DEFAULT_MAX_CHARGER_POWER_KW),
+        ): selector.NumberSelector(
+            selector.NumberSelectorConfig(min=1, max=50, step=0.1, unit_of_measurement="kW")
         ),
         vol.Required(
             CONF_VEHICLE_CHARGING_LOSS_PERCENT,
@@ -194,7 +194,6 @@ class OctopusIOGManagerOptionsFlow(config_entries.OptionsFlow):
             step_id="init",
             data_schema=_build_global_schema(defaults={
                 CONF_REGISTERED_BATTERY_KWH: current.get(CONF_REGISTERED_BATTERY_KWH, DEFAULT_REGISTERED_BATTERY_KWH),
-                CONF_TYPICAL_MAX_CHARGER_POWER_KW: current.get(CONF_TYPICAL_MAX_CHARGER_POWER_KW, DEFAULT_TYPICAL_MAX_CHARGER_POWER_KW),
                 CONF_PLUG_STABILISATION_DELAY: current.get(CONF_PLUG_STABILISATION_DELAY, DEFAULT_PLUG_STABILISATION_DELAY),
                 CONF_DRY_RUN: current.get(CONF_DRY_RUN, DEFAULT_DRY_RUN),
             }),
