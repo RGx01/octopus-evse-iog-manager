@@ -5,6 +5,12 @@ All notable changes to this project are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.3.2] - 2026-07-16
+
+### Fixed
+- **Desired SoC and Manual SoC now step in 1% increments** instead of 5%, so you
+  can set an exact target rather than being snapped to the nearest five.
+
 ## [1.3.1] - 2026-07-05
 
 ### Changed
@@ -94,6 +100,7 @@ First public release.
 - Home Assistant 2026.3 or newer.
 - The Octopus Energy integration on an active Intelligent Go tariff.
 
+[1.3.2]: https://github.com/RGx01/octopus-evse-iog-manager/releases/tag/v1.3.2
 [1.3.1]: https://github.com/RGx01/octopus-evse-iog-manager/releases/tag/v1.3.1
 [1.3.0]: https://github.com/RGx01/octopus-evse-iog-manager/releases/tag/v1.3.0
 [1.2.0]: https://github.com/RGx01/octopus-evse-iog-manager/releases/tag/v1.2.0
