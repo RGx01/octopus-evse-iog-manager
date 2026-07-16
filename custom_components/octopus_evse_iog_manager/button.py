@@ -18,7 +18,7 @@ from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
 from .const import CONF_VEHICLE_NAME, CONF_VEHICLE_SOC_SENSOR, CONF_VEHICLES, DOMAIN
 from .coordinator import OctopusIOGCoordinator
-from .entity import vehicle_device_info, vehicle_slug
+from .entity import async_apply_enabled_rule, vehicle_device_info, vehicle_slug
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -32,18 +32,22 @@ async def async_setup_entry(
     vehicles = entry.data.get(CONF_VEHICLES, [])
     single_vehicle = len(vehicles) <= 1
 
-    async_add_entities([
-        IOGRecalculateButton(
-            coordinator,
-            vcfg,
-            entry.entry_id,
-            # A lone vehicle with no plug sensor is treated as always connected,
-            # so no plug event will ever trigger a write — the button is then
-            # the only trigger, regardless of whether a SoC sensor exists.
-            always_plugged_in=single_vehicle and not vcfg.get(CONF_VEHICLE_PLUG_SENSOR),
+    entities: list[IOGRecalculateButton] = []
+    for vcfg in vehicles:
+        name = vcfg.get(CONF_VEHICLE_NAME, "EV")
+        slug = vehicle_slug(name)
+        # A lone vehicle with no plug sensor is treated as always connected, so
+        # no plug event will ever trigger a write — the button is then the only
+        # trigger, regardless of whether a SoC sensor exists.
+        always_plugged_in = single_vehicle and not vcfg.get(CONF_VEHICLE_PLUG_SENSOR)
+        enabled = always_plugged_in or not vcfg.get(CONF_VEHICLE_SOC_SENSOR)
+        async_apply_enabled_rule(
+            hass, "button", f"{entry.entry_id}_recalculate_{slug}", enabled
         )
-        for vcfg in vehicles
-    ])
+        entities.append(
+            IOGRecalculateButton(coordinator, vcfg, entry.entry_id, always_plugged_in)
+        )
+    async_add_entities(entities)
 
 
 class IOGRecalculateButton(ButtonEntity):
@@ -78,14 +82,8 @@ class IOGRecalculateButton(ButtonEntity):
         self._attr_name = "Recalculate"
         self._attr_device_info = vehicle_device_info(entry_id, self._vehicle_name)
 
-    @property
-    def available(self) -> bool:
-        if self._always_plugged_in:
-            # No plug events will ever fire — this button is the only trigger.
-            return True
-        # Sensor-SoC vehicles recompute continuously and are driven by plug
-        # events; nothing to trigger.
-        return not self._has_soc_sensor
+        if self._has_soc_sensor and not always_plugged_in:
+            self._attr_entity_registry_enabled_default = False
 
     async def async_press(self) -> None:
         _LOGGER.info("Recalculate pressed for '%s'", self._vehicle_name)

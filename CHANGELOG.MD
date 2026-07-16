@@ -11,18 +11,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **"Manual SoC" renamed to "EV SoC at Plug in"** — clearer about what the value
   is actually for. The entity ID is unchanged, so existing dashboards and
   automations keep working; only the display name differs.
-- **"EV SoC at Plug in" is now unavailable for vehicles that have a SoC sensor.**
-  The sensor always wins, so the manual entry had no effect on those vehicles;
-  it now greys out instead of appearing usable.
-- **"Manual Plugged In" is now unavailable when only one vehicle is configured.**
-  With a single vehicle there is nothing to disambiguate, so it is treated as
-  always plugged in and **Recalculate becomes the trigger** for writing the
-  charge target. The switch becomes available again as soon as a second vehicle
-  is added.
-- **"Recalculate" is now unavailable only where a plug event already drives the
-  write** — i.e. for vehicles that have a SoC sensor *and* an automatic plug
-  trigger. It stays available for vehicles with no SoC sensor, and for a lone
-  always-plugged vehicle (where no plug event can ever occur).
+- **Controls that can't do anything are now disabled (hidden) rather than shown.**
+  Following the existing behaviour of "Manual Plugged In" when a plug sensor is
+  configured, entities made redundant by your configuration are now disabled in
+  the entity registry, and re-enable automatically if your configuration changes
+  to make them relevant again. Specifically:
+  - **"EV SoC at Plug in"** is disabled for vehicles that have a SoC sensor —
+    the sensor always wins, so manual entry had no effect.
+  - **"Manual Plugged In"** is disabled when only one vehicle is configured.
+    With a single vehicle there is nothing to disambiguate, so it is treated as
+    always plugged in and **Recalculate becomes the trigger** for writing the
+    charge target. Add a second vehicle and the switch returns.
+  - **"Recalculate"** is disabled only where a plug event already drives the
+    write — i.e. vehicles with a SoC sensor *and* an automatic plug trigger. It
+    stays available for vehicles with no SoC sensor, and for a lone
+    always-plugged vehicle (where no plug event can ever occur).
+
+  If you have explicitly enabled or disabled one of these entities yourself,
+  your choice is respected and left alone.
 
 ## [1.3.2] - 2026-07-16
 

@@ -27,7 +27,7 @@ It also estimates the gross grid energy (including charging losses) and the tota
 
 - **Per-vehicle management** — each EV is its own device with its own entities and its own settings.
 - **Automatic scaling** — target is correct regardless of which EV is plugged in.
-- **Sensor or manual SoC** — use your car integration's SoC sensor, or enter it by hand via **EV SoC at Plug in**. Where a sensor is configured it always wins, so the manual entry and Recalculate button are greyed out for that vehicle.
+- **Sensor or manual SoC** — use your car integration's SoC sensor, or enter it by hand via **EV SoC at Plug in**. Where a sensor is configured it always wins, so the manual entry is disabled for that vehicle.
 - **Sensor or manual plug detection** — use a plug/charger sensor, or a manual "plugged in" switch.
 - **One-at-a-time enforcement** — only one vehicle can be plugged in; manual switches behave like radio buttons, sensor conflicts resolve to most-recently-plugged. With a single vehicle configured there is nothing to disambiguate, so it is treated as always plugged in and the manual switch is hidden.
 - **Estimated charging time** — per-vehicle two-phase estimate that accounts for the vehicle's charge rate, its end-of-charge taper, and charging losses.
@@ -92,12 +92,16 @@ To change settings or pick up new options added in an update, go to **Settings �
 
 ## Entities (per vehicle)
 
+Entities your configuration makes redundant are **disabled** automatically, and
+re-enable themselves if the configuration changes to make them relevant again.
+If you enable or disable one of them yourself, that choice is respected.
+
 | Entity | Purpose |
 |---|---|
 | `number.…_desired_soc` | Target charge level you want |
-| `number.…_manual_soc` | **EV SoC at Plug in** — the SoC to use for vehicles with no SoC sensor (unavailable if a sensor is configured) |
-| `switch.…_manual_plugged_in` | Manual plug state (only when 2+ vehicles and no plug sensor) |
-| `button.…_recalculate` | Recalculate and (if applicable) write the target. Unavailable where a plug event already drives the write |
+| `number.…_manual_soc` | **EV SoC at Plug in** — the SoC to use for vehicles with no SoC sensor (disabled if a sensor is configured) |
+| `switch.…_manual_plugged_in` | Manual plug state (disabled unless 2+ vehicles and no plug sensor) |
+| `button.…_recalculate` | Recalculate and (if applicable) write the target. Disabled where a plug event already drives the write |
 | `sensor.…_would_be_charge_target` | The % that would be written to Octopus |
 | `sensor.…_estimated_charging_time` | Estimated time to reach the desired SoC |
 | `sensor.…_soc` | Effective SoC in use |

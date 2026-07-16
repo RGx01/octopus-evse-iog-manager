@@ -30,7 +30,7 @@ from .const import (
     DOMAIN,
 )
 from .coordinator import OctopusIOGCoordinator
-from .entity import vehicle_device_info, vehicle_slug
+from .entity import async_apply_enabled_rule, vehicle_device_info, vehicle_slug
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -47,6 +47,11 @@ async def async_setup_entry(
     for vcfg in vehicles:
         name = vcfg.get(CONF_VEHICLE_NAME, "EV")
         has_soc_sensor = bool(vcfg.get(CONF_VEHICLE_SOC_SENSOR))
+        slug = vehicle_slug(name)
+        # Redundant when a SoC sensor is configured — the sensor always wins.
+        async_apply_enabled_rule(
+            hass, "number", f"{entry.entry_id}_manual_soc_{slug}", not has_soc_sensor
+        )
         entities.append(IOGDesiredSocNumber(coordinator, name, entry.entry_id))
         entities.append(
             IOGManualSocNumber(coordinator, name, entry.entry_id, has_soc_sensor)
@@ -124,10 +129,8 @@ class IOGManualSocNumber(_IOGNumberBase):
         self._attr_unique_id = f"{entry_id}_manual_soc_{slug}"
         self._attr_name = "EV SoC at Plug in"
 
-    @property
-    def available(self) -> bool:
-        # Redundant when the vehicle has a SoC sensor — the sensor always wins.
-        return not self._has_soc_sensor
+        if has_soc_sensor:
+            self._attr_entity_registry_enabled_default = False
 
     def _push_to_coordinator(self, value: float) -> None:
         self._coordinator.set_manual_soc(self._vehicle_name, value)
