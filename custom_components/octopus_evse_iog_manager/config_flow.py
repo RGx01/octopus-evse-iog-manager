@@ -95,25 +95,27 @@ def _build_vehicle_schema(defaults: dict = {}) -> vol.Schema:
         ),
     }
 
-    # Optional entity selectors: only attach a default when one actually
-    # exists (i.e. editing an existing vehicle). Supplying default="" makes
-    # HA validate the empty string as an entity id and reject it, so we must
-    # omit the default entirely when the field is meant to be left blank.
-    soc_default = defaults.get(CONF_VEHICLE_SOC_SENSOR)
-    if soc_default:
-        soc_key = vol.Optional(CONF_VEHICLE_SOC_SENSOR, default=soc_default)
-    else:
-        soc_key = vol.Optional(CONF_VEHICLE_SOC_SENSOR)
-    schema[soc_key] = selector.EntitySelector(
+    # Optional sensors. These MUST use description={"suggested_value": ...}
+    # rather than default=... — with a default, clearing the field in the UI
+    # simply omits the key from the submitted data and voluptuous then puts the
+    # old value straight back, making the sensor impossible to remove. A
+    # suggested value pre-fills the form without that re-injection, so clearing
+    # the field genuinely drops the key.
+    schema[
+        vol.Optional(
+            CONF_VEHICLE_SOC_SENSOR,
+            description={"suggested_value": defaults.get(CONF_VEHICLE_SOC_SENSOR)},
+        )
+    ] = selector.EntitySelector(
         selector.EntitySelectorConfig(domain=["sensor"], device_class="battery")
     )
 
-    plug_default = defaults.get(CONF_VEHICLE_PLUG_SENSOR)
-    if plug_default:
-        plug_key = vol.Optional(CONF_VEHICLE_PLUG_SENSOR, default=plug_default)
-    else:
-        plug_key = vol.Optional(CONF_VEHICLE_PLUG_SENSOR)
-    schema[plug_key] = selector.EntitySelector(
+    schema[
+        vol.Optional(
+            CONF_VEHICLE_PLUG_SENSOR,
+            description={"suggested_value": defaults.get(CONF_VEHICLE_PLUG_SENSOR)},
+        )
+    ] = selector.EntitySelector(
         selector.EntitySelectorConfig(domain=["binary_sensor", "input_boolean", "switch"])
     )
 

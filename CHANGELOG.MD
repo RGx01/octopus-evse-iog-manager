@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [1.4.0] - 2026-07-16
 
+### Fixed
+- **Removing a SoC or plug sensor from a vehicle now actually works.** The
+  optional sensor fields used a voluptuous `default`, which meant clearing one
+  in the UI simply omitted it from the submitted data and the old value was put
+  straight back — so a sensor could never be removed, and the vehicle's entities
+  kept behaving as though it were still configured. They now use a suggested
+  value instead, so clearing a field genuinely drops it and the vehicle's
+  entities update on the next reload.
+
 ### Changed
 - **"Manual SoC" renamed to "EV SoC at Plug in"** — clearer about what the value
   is actually for. The entity ID is unchanged, so existing dashboards and
