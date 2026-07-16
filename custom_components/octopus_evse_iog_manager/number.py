@@ -3,7 +3,9 @@ Number platform for Octopus EVSE IOG Manager.
 
 Per vehicle:
   number.iog_desired_soc_<name>  — desired charge target %
-  number.iog_manual_soc_<name>   — manual SoC override / fallback
+  number.iog_manual_soc_<name>   — "EV SoC at Plug in"; used only when the
+                                   vehicle has no SoC sensor (unavailable if it
+                                   does, since the sensor always wins)
 
 Both persist across restarts via RestoreEntity and are grouped under the
 vehicle's device.
@@ -21,6 +23,7 @@ from homeassistant.helpers.restore_state import RestoreEntity
 
 from .const import (
     CONF_VEHICLE_NAME,
+    CONF_VEHICLE_SOC_SENSOR,
     CONF_VEHICLES,
     DEFAULT_DESIRED_SOC_PERCENT,
     DEFAULT_MANUAL_SOC_PERCENT,
@@ -43,8 +46,11 @@ async def async_setup_entry(
     entities: list[NumberEntity] = []
     for vcfg in vehicles:
         name = vcfg.get(CONF_VEHICLE_NAME, "EV")
+        has_soc_sensor = bool(vcfg.get(CONF_VEHICLE_SOC_SENSOR))
         entities.append(IOGDesiredSocNumber(coordinator, name, entry.entry_id))
-        entities.append(IOGManualSocNumber(coordinator, name, entry.entry_id))
+        entities.append(
+            IOGManualSocNumber(coordinator, name, entry.entry_id, has_soc_sensor)
+        )
     async_add_entities(entities)
 
 
@@ -101,13 +107,27 @@ class IOGDesiredSocNumber(_IOGNumberBase):
 
 
 class IOGManualSocNumber(_IOGNumberBase):
+    """
+    The SoC to use for this vehicle when it is plugged in.
+
+    Only relevant for vehicles without a SoC sensor — where a sensor is
+    configured it always wins, so this entity is marked unavailable to make it
+    clear it has no effect.
+    """
+
     _attr_icon = "mdi:battery-unknown"
 
-    def __init__(self, coordinator, vehicle_name, entry_id):
+    def __init__(self, coordinator, vehicle_name, entry_id, has_soc_sensor: bool = False):
         super().__init__(coordinator, vehicle_name, entry_id, DEFAULT_MANUAL_SOC_PERCENT)
+        self._has_soc_sensor = has_soc_sensor
         slug = vehicle_slug(vehicle_name)
         self._attr_unique_id = f"{entry_id}_manual_soc_{slug}"
-        self._attr_name = "Manual SoC"
+        self._attr_name = "EV SoC at Plug in"
+
+    @property
+    def available(self) -> bool:
+        # Redundant when the vehicle has a SoC sensor — the sensor always wins.
+        return not self._has_soc_sensor
 
     def _push_to_coordinator(self, value: float) -> None:
         self._coordinator.set_manual_soc(self._vehicle_name, value)

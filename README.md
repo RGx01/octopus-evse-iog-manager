@@ -27,9 +27,9 @@ It also estimates the gross grid energy (including charging losses) and the tota
 
 - **Per-vehicle management** — each EV is its own device with its own entities and its own settings.
 - **Automatic scaling** — target is correct regardless of which EV is plugged in.
-- **Sensor or manual SoC** — use your car integration's SoC sensor, or enter it by hand. The sensor wins when available; manual is the fallback.
+- **Sensor or manual SoC** — use your car integration's SoC sensor, or enter it by hand via **EV SoC at Plug in**. Where a sensor is configured it always wins, so the manual entry and Recalculate button are greyed out for that vehicle.
 - **Sensor or manual plug detection** — use a plug/charger sensor, or a manual "plugged in" switch.
-- **One-at-a-time enforcement** — only one vehicle can be plugged in; manual switches behave like radio buttons, sensor conflicts resolve to most-recently-plugged.
+- **One-at-a-time enforcement** — only one vehicle can be plugged in; manual switches behave like radio buttons, sensor conflicts resolve to most-recently-plugged. With a single vehicle configured there is nothing to disambiguate, so it is treated as always plugged in and the manual switch is hidden.
 - **Estimated charging time** — per-vehicle two-phase estimate that accounts for the vehicle's charge rate, its end-of-charge taper, and charging losses.
 - **Stabilisation delay** — waits (configurable) after plug-in before reading SoC, for slow car integrations.
 - **Set once per session** — writes the target once, then leaves it alone until unplugged or you press recalculate.
@@ -54,6 +54,7 @@ Example — a 50 kWh car, 7 kW charger, 10% loss, tapering to 2.9 kW at 95%, cha
 
 - Home Assistant **2026.3** or newer.
 - [Octopus Energy integration](https://github.com/BottlecapDave/HomeAssistant-OctopusEnergy) installed and on an active Intelligent Go tariff.
+- **A single EVSE configured in the Octopus Energy integration** — see [Limitations](#limitations).
 - Optionally, a per-vehicle SoC sensor and/or plug sensor (both can be manual instead).
 
 ## Installation
@@ -83,7 +84,7 @@ Copy `custom_components/octopus_evse_iog_manager/` into your HA `config/custom_c
 - **Charging loss (%)** — round-trip loss for this vehicle (default 10%).
 - **Rate-limit SoC (%)** — the SoC where the car tapers (e.g. 95%). Leave at 100% for no taper.
 - **Rate-limited power (kW)** — the reduced rate above the knee (used only if the knee is below 100%).
-- **SoC sensor** and **plug sensor** — both optional. Leave blank to control that vehicle manually via its Manual SoC number and Manual Plugged In switch.
+- **SoC sensor** and **plug sensor** — both optional. Leave the SoC sensor blank to enter the vehicle's SoC by hand via its **EV SoC at Plug in** number; leave the plug sensor blank to use its Manual Plugged In switch.
 
 ### Reconfiguring / after an upgrade
 
@@ -94,9 +95,9 @@ To change settings or pick up new options added in an update, go to **Settings �
 | Entity | Purpose |
 |---|---|
 | `number.…_desired_soc` | Target charge level you want |
-| `number.…_manual_soc` | Manual SoC entry (fallback when no sensor / sensor unavailable) |
-| `switch.…_manual_plugged_in` | Manual plug state (when no plug sensor) |
-| `button.…_recalculate` | Recalculate and (if applicable) write the target |
+| `number.…_manual_soc` | **EV SoC at Plug in** — the SoC to use for vehicles with no SoC sensor (unavailable if a sensor is configured) |
+| `switch.…_manual_plugged_in` | Manual plug state (only when 2+ vehicles and no plug sensor) |
+| `button.…_recalculate` | Recalculate and (if applicable) write the target. Unavailable where a plug event already drives the write |
 | `sensor.…_would_be_charge_target` | The % that would be written to Octopus |
 | `sensor.…_estimated_charging_time` | Estimated time to reach the desired SoC |
 | `sensor.…_soc` | Effective SoC in use |
@@ -104,10 +105,22 @@ To change settings or pick up new options added in an update, go to **Settings �
 | `sensor.…_session_state` | idle / waiting / target_set |
 | `sensor.…_wait_timer` | Countdown during stabilisation delay |
 
+## Limitations
+
+**One EVSE only.** This integration supports a single EVSE (charger) configured in
+the Octopus Energy integration. It discovers the Intelligent Charge Target entity by
+matching `number.octopus_energy_*_intelligent_charge_target`, and expects exactly one
+match. If you have more than one Octopus account or EVSE set up, several entities will
+match, the integration will use the first one it finds and log a warning — which may
+not be the charger you intended.
+
+Multiple *vehicles* on that one EVSE are fully supported — that is the whole point of
+the integration. It is multiple *chargers* that aren't.
+
 ## When does it write to Octopus?
 
 The actual Intelligent Charge Target is written **only** when all of these hold:
-- a vehicle is plugged in,
+- a vehicle is plugged in (a lone vehicle with no plug sensor always counts as plugged in),
 - the stabilisation delay has elapsed (skipped for manual SoC),
 - dry run is off.
 

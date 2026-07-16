@@ -40,9 +40,10 @@ async def async_setup_entry(
 ) -> None:
     coordinator: OctopusIOGCoordinator = hass.data[DOMAIN][entry.entry_id]
     vehicles = entry.data.get(CONF_VEHICLES, [])
+    single_vehicle = len(vehicles) <= 1
 
     async_add_entities([
-        IOGPluggedInSwitch(coordinator, vcfg, entry.entry_id)
+        IOGPluggedInSwitch(coordinator, vcfg, entry.entry_id, single_vehicle)
         for vcfg in vehicles
     ])
 
@@ -51,10 +52,17 @@ class IOGPluggedInSwitch(SwitchEntity, RestoreEntity):
     _attr_icon = "mdi:ev-plug-type2"
     _attr_has_entity_name = True
 
-    def __init__(self, coordinator: OctopusIOGCoordinator, vehicle_cfg: dict, entry_id: str) -> None:
+    def __init__(
+        self,
+        coordinator: OctopusIOGCoordinator,
+        vehicle_cfg: dict,
+        entry_id: str,
+        single_vehicle: bool = False,
+    ) -> None:
         self._coordinator = coordinator
         self._vehicle_name = vehicle_cfg.get(CONF_VEHICLE_NAME, "EV")
         self._has_plug_sensor = bool(vehicle_cfg.get(CONF_VEHICLE_PLUG_SENSOR))
+        self._single_vehicle = single_vehicle
         self._is_on = False
 
         slug = vehicle_slug(self._vehicle_name)
@@ -64,6 +72,13 @@ class IOGPluggedInSwitch(SwitchEntity, RestoreEntity):
 
         if self._has_plug_sensor:
             self._attr_entity_registry_enabled_default = False  # hidden by default when sensor exists
+
+    @property
+    def available(self) -> bool:
+        # With a single vehicle there is nothing to disambiguate — it's treated
+        # as always connected — so this switch has no purpose. It becomes
+        # available again as soon as a second vehicle is configured.
+        return not self._single_vehicle
 
     async def async_added_to_hass(self) -> None:
         await super().async_added_to_hass()
@@ -97,11 +112,16 @@ class IOGPluggedInSwitch(SwitchEntity, RestoreEntity):
 
     @property
     def extra_state_attributes(self) -> dict[str, Any]:
-        return {
-            "note": "Ignored — a plug sensor is configured for this vehicle."
-            if self._has_plug_sensor
-            else "Set ON when this vehicle is plugged in (no plug sensor configured)."
-        }
+        if self._single_vehicle:
+            note = (
+                "Not needed — only one vehicle is configured, so it is treated as "
+                "always plugged in. Add a second vehicle to use this switch."
+            )
+        elif self._has_plug_sensor:
+            note = "Ignored — a plug sensor is configured for this vehicle."
+        else:
+            note = "Set ON when this vehicle is plugged in (no plug sensor configured)."
+        return {"note": note}
 
     async def async_turn_on(self, **kwargs) -> None:
         self._is_on = True
