@@ -28,7 +28,7 @@ from .const import (
     SIGNAL_MANUAL_PLUG_UPDATED,
 )
 from .coordinator import OctopusIOGCoordinator
-from .entity import vehicle_device_info, vehicle_slug
+from .entity import async_apply_enabled_rule, vehicle_device_info, vehicle_slug
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -40,21 +40,38 @@ async def async_setup_entry(
 ) -> None:
     coordinator: OctopusIOGCoordinator = hass.data[DOMAIN][entry.entry_id]
     vehicles = entry.data.get(CONF_VEHICLES, [])
+    single_vehicle = len(vehicles) <= 1
 
-    async_add_entities([
-        IOGPluggedInSwitch(coordinator, vcfg, entry.entry_id)
-        for vcfg in vehicles
-    ])
+    entities: list[IOGPluggedInSwitch] = []
+    for vcfg in vehicles:
+        name = vcfg.get(CONF_VEHICLE_NAME, "EV")
+        slug = vehicle_slug(name)
+        # Needed only when there is more than one vehicle and no plug sensor.
+        enabled = not single_vehicle and not vcfg.get(CONF_VEHICLE_PLUG_SENSOR)
+        async_apply_enabled_rule(
+            hass, "switch", f"{entry.entry_id}_plugged_in_{slug}", enabled
+        )
+        entities.append(
+            IOGPluggedInSwitch(coordinator, vcfg, entry.entry_id, single_vehicle)
+        )
+    async_add_entities(entities)
 
 
 class IOGPluggedInSwitch(SwitchEntity, RestoreEntity):
     _attr_icon = "mdi:ev-plug-type2"
     _attr_has_entity_name = True
 
-    def __init__(self, coordinator: OctopusIOGCoordinator, vehicle_cfg: dict, entry_id: str) -> None:
+    def __init__(
+        self,
+        coordinator: OctopusIOGCoordinator,
+        vehicle_cfg: dict,
+        entry_id: str,
+        single_vehicle: bool = False,
+    ) -> None:
         self._coordinator = coordinator
         self._vehicle_name = vehicle_cfg.get(CONF_VEHICLE_NAME, "EV")
         self._has_plug_sensor = bool(vehicle_cfg.get(CONF_VEHICLE_PLUG_SENSOR))
+        self._single_vehicle = single_vehicle
         self._is_on = False
 
         slug = vehicle_slug(self._vehicle_name)
@@ -62,8 +79,11 @@ class IOGPluggedInSwitch(SwitchEntity, RestoreEntity):
         self._attr_name = "Manual Plugged In"
         self._attr_device_info = vehicle_device_info(entry_id, self._vehicle_name)
 
-        if self._has_plug_sensor:
-            self._attr_entity_registry_enabled_default = False  # hidden by default when sensor exists
+        # Only relevant with 2+ vehicles and no plug sensor. With one vehicle
+        # there is nothing to disambiguate (it's treated as always plugged in);
+        # with a plug sensor the sensor wins.
+        if self._has_plug_sensor or single_vehicle:
+            self._attr_entity_registry_enabled_default = False
 
     async def async_added_to_hass(self) -> None:
         await super().async_added_to_hass()
@@ -97,11 +117,16 @@ class IOGPluggedInSwitch(SwitchEntity, RestoreEntity):
 
     @property
     def extra_state_attributes(self) -> dict[str, Any]:
-        return {
-            "note": "Ignored — a plug sensor is configured for this vehicle."
-            if self._has_plug_sensor
-            else "Set ON when this vehicle is plugged in (no plug sensor configured)."
-        }
+        if self._single_vehicle:
+            note = (
+                "Not needed — only one vehicle is configured, so it is treated as "
+                "always plugged in. Add a second vehicle to use this switch."
+            )
+        elif self._has_plug_sensor:
+            note = "Ignored — a plug sensor is configured for this vehicle."
+        else:
+            note = "Set ON when this vehicle is plugged in (no plug sensor configured)."
+        return {"note": note}
 
     async def async_turn_on(self, **kwargs) -> None:
         self._is_on = True

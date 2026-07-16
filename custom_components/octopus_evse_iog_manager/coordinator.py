@@ -266,11 +266,20 @@ class OctopusIOGCoordinator(DataUpdateCoordinator):
         return self._manual_soc.get(vehicle_name, DEFAULT_MANUAL_SOC_PERCENT), "manual"
 
     def _resolve_plugged_in(self, vehicle_name: str) -> bool:
-        """Plug sensor if configured, else manual switch."""
+        """
+        Plug sensor if configured, else the manual switch.
+
+        Special case: a single configured vehicle with no plug sensor has
+        nothing to disambiguate against, so it is treated as always connected.
+        The Recalculate button is the trigger for writes in that mode (the
+        manual plug switch is hidden until a second vehicle is added).
+        """
         vcfg = self._vehicle_config(vehicle_name)
         plug_entity = vcfg.get(CONF_VEHICLE_PLUG_SENSOR) if vcfg else None
         if plug_entity:
             return _is_truthy(self._get_state(plug_entity))
+        if len(self._config.get(CONF_VEHICLES, [])) <= 1:
+            return True
         return self._manual_plugged_in.get(vehicle_name, False)
 
     # ------------------------------------------------------------------

@@ -5,6 +5,31 @@ All notable changes to this project are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.4.0] - 2026-07-16
+
+### Changed
+- **"Manual SoC" renamed to "EV SoC at Plug in"** — clearer about what the value
+  is actually for. The entity ID is unchanged, so existing dashboards and
+  automations keep working; only the display name differs.
+- **Controls that can't do anything are now disabled (hidden) rather than shown.**
+  Following the existing behaviour of "Manual Plugged In" when a plug sensor is
+  configured, entities made redundant by your configuration are now disabled in
+  the entity registry, and re-enable automatically if your configuration changes
+  to make them relevant again. Specifically:
+  - **"EV SoC at Plug in"** is disabled for vehicles that have a SoC sensor —
+    the sensor always wins, so manual entry had no effect.
+  - **"Manual Plugged In"** is disabled when only one vehicle is configured.
+    With a single vehicle there is nothing to disambiguate, so it is treated as
+    always plugged in and **Recalculate becomes the trigger** for writing the
+    charge target. Add a second vehicle and the switch returns.
+  - **"Recalculate"** is disabled only where a plug event already drives the
+    write — i.e. vehicles with a SoC sensor *and* an automatic plug trigger. It
+    stays available for vehicles with no SoC sensor, and for a lone
+    always-plugged vehicle (where no plug event can ever occur).
+
+  If you have explicitly enabled or disabled one of these entities yourself,
+  your choice is respected and left alone.
+
 ## [1.3.2] - 2026-07-16
 
 ### Fixed
@@ -100,6 +125,7 @@ First public release.
 - Home Assistant 2026.3 or newer.
 - The Octopus Energy integration on an active Intelligent Go tariff.
 
+[1.4.0]: https://github.com/RGx01/octopus-evse-iog-manager/releases/tag/v1.4.0
 [1.3.2]: https://github.com/RGx01/octopus-evse-iog-manager/releases/tag/v1.3.2
 [1.3.1]: https://github.com/RGx01/octopus-evse-iog-manager/releases/tag/v1.3.1
 [1.3.0]: https://github.com/RGx01/octopus-evse-iog-manager/releases/tag/v1.3.0
