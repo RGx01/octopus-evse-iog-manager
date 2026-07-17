@@ -43,7 +43,6 @@ from .calculations import (
     calculate_iog_target_percent,
     calculate_required_energy,
     resolve_plug_state,
-    select_active_vehicle,
 )
 from .const import (
     CONF_CHARGING_LOSS_PERCENT,

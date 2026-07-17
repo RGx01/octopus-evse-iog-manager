@@ -5,6 +5,47 @@ All notable changes to this project are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.4.4] - 2026-07-17
+
+Two bugs reported by [@reedy](https://github.com/reedy), both introduced by
+earlier 1.4.x releases and both only visible once someone else installed it.
+
+### Fixed
+- **The Recalculate button failed to be created for every user**
+  ([#17](https://github.com/RGx01/octopus-evse-iog-manager/issues/17)).
+  `button.py` referenced `CONF_VEHICLE_PLUG_SENSOR` without importing it, raising
+  `NameError: name 'CONF_VEHICLE_PLUG_SENSOR' is not defined` and taking the whole
+  button platform down with it. Introduced in 1.4.0 alongside the always-plugged
+  single-vehicle rule.
+- **"Energy Required" logged an error on every startup**
+  ([#16](https://github.com/RGx01/octopus-evse-iog-manager/issues/16)).
+  The sensor declared `device_class: energy` together with `state_class:
+  measurement`, which Home Assistant rejects — the energy device class is meant
+  for meters that accumulate, so it only accepts `None`, `total` or
+  `total_increasing`. The state class has been removed: this is a forward-looking
+  estimate that rises and falls as the SoC and target change, so it never
+  accumulates and `total_increasing` would be untrue. The sensor keeps its kWh
+  unit and energy formatting and behaves exactly as before; it is simply no longer
+  offered to long-term statistics, which it was never eligible for anyway.
+- Removed unused imports in `coordinator.py` and `sensor.py`.
+
+### Internal
+- **Added a lint job to CI.** Issue #17 was an undefined name — a bug a linter
+  catches instantly, in any file, without a Home Assistant install. The unit tests
+  couldn't see it because they don't import the HA-facing modules. `ruff check`
+  now runs on every pull request across the whole codebase with Pyflakes'
+  correctness rules (undefined names, unused imports, syntax errors) and no style
+  rules.
+- Added static checks on every sensor's `device_class` / `state_class` pairing, so
+  an incompatible combination fails CI rather than surfacing as a runtime error in
+  users' logs.
+
+### Notes
+- `select_active_vehicle()` in `calculations.py` is no longer used by the
+  coordinator — `_enforce_single_plugged_in()` replaced it — but is still exported
+  and unit tested. It is left in place for now; the tests covering it do not
+  reflect live behaviour.
+
 ## [1.4.3] - 2026-07-17
 
 ### Fixed
@@ -211,6 +252,7 @@ First public release.
 - Home Assistant 2026.3 or newer.
 - The Octopus Energy integration on an active Intelligent Go tariff.
 
+[1.4.4]: https://github.com/RGx01/octopus-evse-iog-manager/releases/tag/v1.4.4
 [1.4.3]: https://github.com/RGx01/octopus-evse-iog-manager/releases/tag/v1.4.3
 [1.4.2]: https://github.com/RGx01/octopus-evse-iog-manager/releases/tag/v1.4.2
 [1.4.1]: https://github.com/RGx01/octopus-evse-iog-manager/releases/tag/v1.4.1
