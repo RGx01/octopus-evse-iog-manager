@@ -5,6 +5,31 @@ All notable changes to this project are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.4.3] - 2026-07-17
+
+### Fixed
+- **1.4.2 failed to set up.** Two coordinator attributes (`_vehicle_calc` and
+  `_manual_calc_requested`) were accidentally moved out of `__init__` when the
+  session-persistence code was added in 1.4.1, so they were never initialised and
+  the first update raised
+  `AttributeError: 'OctopusIOGCoordinator' object has no attribute '_manual_calc_requested'`.
+  If you are on 1.4.0, upgrade straight to 1.4.3 and skip 1.4.1 and 1.4.2.
+
+### Internal
+- **Added static wiring tests.** The existing unit tests only cover
+  `calculations.py` — roughly 11% of the component — which is why the 1.4.2 and
+  1.4.3 setup failures both shipped green. Both were valid Python that only broke
+  when Home Assistant instantiated the coordinator, so they were invisible to
+  tests that never import it. Five new AST-based checks close that gap without
+  needing a Home Assistant install:
+  - every `self._*` attribute read by the coordinator is initialised in `__init__`
+  - no attribute is introduced outside `__init__`
+  - the `OctopusIOGCoordinator(...)` call site matches the constructor signature
+  - `async_load_session_state()` runs before `async_config_entry_first_refresh()`
+  - `async_unload_entry` flushes the pending session save
+
+  Both shipped bugs were reproduced and confirmed to turn these red.
+
 ## [1.4.2] - 2026-07-17
 
 ### Fixed
@@ -186,6 +211,7 @@ First public release.
 - Home Assistant 2026.3 or newer.
 - The Octopus Energy integration on an active Intelligent Go tariff.
 
+[1.4.3]: https://github.com/RGx01/octopus-evse-iog-manager/releases/tag/v1.4.3
 [1.4.2]: https://github.com/RGx01/octopus-evse-iog-manager/releases/tag/v1.4.2
 [1.4.1]: https://github.com/RGx01/octopus-evse-iog-manager/releases/tag/v1.4.1
 [1.4.0]: https://github.com/RGx01/octopus-evse-iog-manager/releases/tag/v1.4.0
