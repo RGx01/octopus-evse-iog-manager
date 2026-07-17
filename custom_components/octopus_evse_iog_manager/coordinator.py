@@ -137,6 +137,15 @@ class OctopusIOGCoordinator(DataUpdateCoordinator):
         # Cached BCD Octopus target entity id (discovered by pattern match)
         self._resolved_target_entity: str | None = None
 
+        # Per-vehicle computed results { name: {"target": int, "calc": dict} }
+        # Continuously refreshed for sensor-SoC vehicles; refreshed on button
+        # press for manual-SoC vehicles.
+        self._vehicle_calc: dict[str, dict] = {}
+
+        # Set of vehicle names for which a manual recalculation has been
+        # requested (via the recalculate button on a manual-SoC vehicle).
+        self._manual_calc_requested: set[str] = set()
+
     # ------------------------------------------------------------------
     # Session persistence
     # ------------------------------------------------------------------
@@ -198,15 +207,6 @@ class OctopusIOGCoordinator(DataUpdateCoordinator):
             await self._store.async_save(self._session_payload())
         except Exception:  # pragma: no cover - never block teardown
             _LOGGER.warning("Could not save session state", exc_info=True)
-
-        # Per-vehicle computed results { name: {"target": int, "calc": dict} }
-        # Continuously refreshed for sensor-SoC vehicles; refreshed on button
-        # press for manual-SoC vehicles.
-        self._vehicle_calc: dict[str, dict] = {}
-
-        # Set of vehicle names for which a manual recalculation has been
-        # requested (via the recalculate button on a manual-SoC vehicle).
-        self._manual_calc_requested: set[str] = set()
 
     # ------------------------------------------------------------------
     # Public API used by number/switch/button entities
