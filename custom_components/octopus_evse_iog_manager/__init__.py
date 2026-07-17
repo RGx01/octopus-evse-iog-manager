@@ -6,9 +6,10 @@ import logging
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant, ServiceCall
 from homeassistant.helpers import device_registry as dr
+from homeassistant.helpers.storage import Store
 
 from .const import CONF_VEHICLE_NAME, CONF_VEHICLES, DOMAIN, SERVICE_RECALCULATE
-from .coordinator import OctopusIOGCoordinator
+from .coordinator import STORAGE_VERSION, OctopusIOGCoordinator
 from .entity import vehicle_slug
 
 _LOGGER = logging.getLogger(__name__)
@@ -42,7 +43,11 @@ def _cleanup_orphaned_devices(hass: HomeAssistant, entry: ConfigEntry) -> None:
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     hass.data.setdefault(DOMAIN, {})
 
-    coordinator = OctopusIOGCoordinator(hass, entry.data)
+    coordinator = OctopusIOGCoordinator(hass, entry.data, entry.entry_id)
+    # Restore the saved session state BEFORE the first refresh, otherwise the
+    # first poll starts from IDLE and re-writes the charge target for a car
+    # that is already plugged in and already sorted.
+    await coordinator.async_load_session_state()
     await coordinator.async_config_entry_first_refresh()
 
     hass.data[DOMAIN][entry.entry_id] = coordinator
@@ -78,7 +83,18 @@ async def _async_update_listener(hass: HomeAssistant, entry: ConfigEntry) -> Non
 async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     unload_ok = await hass.config_entries.async_unload_platforms(entry, PLATFORMS)
     if unload_ok:
+        coordinator = hass.data[DOMAIN].get(entry.entry_id)
+        if coordinator is not None:
+            # Flush any debounced session save now. A reload builds a fresh
+            # coordinator, and a pending delayed write from the old one could
+            # otherwise land after it and clobber newer state.
+            await coordinator.async_save_session_state_now()
         hass.data[DOMAIN].pop(entry.entry_id)
         if not hass.data[DOMAIN]:
             hass.services.async_remove(DOMAIN, SERVICE_RECALCULATE)
     return unload_ok
+
+
+async def async_remove_entry(hass: HomeAssistant, entry: ConfigEntry) -> None:
+    """Discard the persisted session state when the integration is removed."""
+    await Store(hass, STORAGE_VERSION, f"{DOMAIN}.{entry.entry_id}.sessions").async_remove()
