@@ -1,0 +1,16 @@
+# Correctness-focused linting.
+#
+# The selected rules are Pyflakes (F) plus Pycodestyle's error subset (E4/E7/E9)
+# — undefined names, unused imports, broken syntax. Deliberately no style rules:
+# the point is to catch bugs that reach users, not to bikeshed formatting.
+#
+# This exists because of issue #17: button.py used CONF_VEHICLE_PLUG_SENSOR
+# without importing it. Valid-looking code, NameError at runtime, and the
+# Recalculate button failed to create for everyone. Ruff catches that class of
+# bug across every file in milliseconds, with no Home Assistant install.
+
+line-length = 100
+target-version = "py312"
+
+[lint]
+select = ["F", "E4", "E7", "E9"]

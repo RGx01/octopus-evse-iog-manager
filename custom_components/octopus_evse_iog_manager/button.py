@@ -16,7 +16,13 @@ from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
-from .const import CONF_VEHICLE_NAME, CONF_VEHICLE_SOC_SENSOR, CONF_VEHICLES, DOMAIN
+from .const import (
+    CONF_VEHICLE_NAME,
+    CONF_VEHICLE_PLUG_SENSOR,
+    CONF_VEHICLE_SOC_SENSOR,
+    CONF_VEHICLES,
+    DOMAIN,
+)
 from .coordinator import OctopusIOGCoordinator
 from .entity import async_apply_enabled_rule, vehicle_device_info, vehicle_slug
 

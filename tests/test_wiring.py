@@ -22,8 +22,6 @@ from __future__ import annotations
 import ast
 from pathlib import Path
 
-import pytest
-
 _COMPONENT = (
     Path(__file__).resolve().parents[1]
     / "custom_components"
@@ -126,7 +124,7 @@ class TestCoordinatorAttributesInitialised:
         assert not missing, (
             "attributes are read but never initialised in __init__ "
             "(this is the 1.4.3 bug): "
-            + ", ".join(f"self.{a} (read at line {l})" for a, l in sorted(missing.items()))
+            + ", ".join(f"self.{a} (read at line {line})" for a, line in sorted(missing.items()))
         )
 
     def test_no_attribute_is_introduced_outside_init(self):

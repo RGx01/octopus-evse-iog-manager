@@ -2,13 +2,11 @@
 from __future__ import annotations
 
 import logging
-from dataclasses import dataclass
 from typing import Any
 
 from homeassistant.components.sensor import (
     SensorDeviceClass,
     SensorEntity,
-    SensorEntityDescription,
     SensorStateClass,
 )
 from homeassistant.config_entries import ConfigEntry
@@ -215,11 +213,20 @@ class IOGVehicleSocSensor(IOGVehicleBaseSensor):
 
 
 class IOGEnergyRequiredSensor(IOGVehicleBaseSensor):
-    """Estimated gross grid energy required to reach this vehicle's desired SoC."""
+    """
+    Estimated gross grid energy required to reach this vehicle's desired SoC.
+
+    Deliberately has no state_class. Home Assistant only accepts None, 'total'
+    or 'total_increasing' alongside device_class 'energy', because that class is
+    intended for meters that accumulate. This is a forward-looking estimate that
+    rises and falls as the SoC and desired target change — it never accumulates,
+    so 'total_increasing' would be untrue and 'total' would imply a meter with
+    resets. None is the honest option; the sensor keeps its kWh unit and energy
+    formatting, and simply isn't fed into long-term statistics.
+    """
 
     _attr_icon = "mdi:lightning-bolt"
     _attr_native_unit_of_measurement = UnitOfEnergy.KILO_WATT_HOUR
-    _attr_state_class = SensorStateClass.MEASUREMENT
     _attr_device_class = SensorDeviceClass.ENERGY
 
     def __init__(self, coordinator: OctopusIOGCoordinator, entry_id: str, vehicle_name: str) -> None:
