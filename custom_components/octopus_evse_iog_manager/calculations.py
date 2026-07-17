@@ -1,9 +1,37 @@
 """
-Core calculation logic for Octopus EVSE IOG Manager.
+Core calculation and resolution logic for Octopus EVSE IOG Manager.
 
 All functions are pure — no HA dependencies — making them straightforward to unit test.
 """
 from __future__ import annotations
+
+
+PLUG_TRUTHY = frozenset(
+    {"on", "true", "yes", "1", "home", "connected", "charging", "plugged_in"}
+)
+PLUG_FALSY = frozenset(
+    {"off", "false", "no", "0", "away", "disconnected", "not_connected", "unplugged"}
+)
+
+
+def resolve_plug_state(state: str | None) -> bool | None:
+    """
+    Resolve a plug sensor's raw state string to True / False / None.
+
+    None means *unknown* — the entity is missing, `unavailable`, `unknown`, or
+    reports something we don't recognise. Unknown is deliberately NOT the same
+    as unplugged: treating a dropout as an unplug resets the charging session
+    and causes a spurious re-write of the charge target when the sensor
+    recovers. Callers must hold their current state on None.
+    """
+    if state is None:
+        return None
+    s = state.strip().lower()
+    if s in PLUG_TRUTHY:
+        return True
+    if s in PLUG_FALSY:
+        return False
+    return None
 
 
 def calculate_charging_time(

@@ -1,0 +1,7 @@
+# Test dependencies.
+#
+# The unit tests cover calculations.py, which is deliberately free of Home
+# Assistant imports (see tests/conftest.py). That keeps this list to pytest
+# alone: nothing to pin against an HA release, and the suite runs in well under
+# a second. Hassfest and HACS validation cover the HA-facing side separately.
+pytest>=8.0

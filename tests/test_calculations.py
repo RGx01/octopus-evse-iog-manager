@@ -1,17 +1,15 @@
 """
 Unit tests for octopus_evse_iog_manager calculations.
+
+These are pure unit tests — no Home Assistant install required. See conftest.py
+for why the module is loaded by path rather than imported as a package.
 """
-import sys
-import os
+from conftest import calculations
 
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
-
-from custom_components.octopus_evse_iog_manager.calculations import (
-    calculate_charging_time,
-    calculate_iog_target_percent,
-    calculate_required_energy,
-    select_active_vehicle,
-)
+calculate_charging_time = calculations.calculate_charging_time
+calculate_iog_target_percent = calculations.calculate_iog_target_percent
+calculate_required_energy = calculations.calculate_required_energy
+select_active_vehicle = calculations.select_active_vehicle
 
 
 class TestCalculateRequiredEnergy:

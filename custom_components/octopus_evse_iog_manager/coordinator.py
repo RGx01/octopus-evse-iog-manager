@@ -7,12 +7,21 @@ State machine per vehicle:
   TARGET_SET → unplugged → IDLE
   TARGET_SET → recalculate button → WAITING (re-triggers flow)
 
-Manual SoC bypass:
-  When a vehicle's SoC is provided manually (no sensor, or sensor unavailable),
-  pressing recalculate skips the stabilisation delay and writes immediately.
+The session state is persisted, so a restart, upgrade or config reload restores
+TARGET_SET rather than re-running the write for a car that is already sorted.
 
-SoC resolution:  sensor value if configured AND available, else manual number.
-Plug resolution: plug sensor if configured, else manual switch.
+Manual SoC bypass:
+  When a vehicle's SoC is provided manually (no sensor configured), pressing
+  recalculate skips the stabilisation delay and writes immediately.
+
+SoC resolution:
+  sensor value if configured AND available; None if configured but unavailable
+  (never substitutes a fallback); manual number only when no sensor is set.
+
+Plug resolution (tri-state):
+  True / False from the plug sensor, or None when it is unavailable or
+  unrecognised. None means "unknown" and holds the current state — it is never
+  treated as unplugged, so a sensor dropout can't reset a session.
 """
 from __future__ import annotations
 
@@ -23,15 +32,17 @@ from typing import Any
 from homeassistant.components.number import DOMAIN as NUMBER_DOMAIN
 from homeassistant.components.number import SERVICE_SET_VALUE
 from homeassistant.const import ATTR_ENTITY_ID
-from homeassistant.core import HomeAssistant
+from homeassistant.core import HomeAssistant, callback
 from homeassistant.util import dt as dt_util
 from homeassistant.helpers.dispatcher import async_dispatcher_send
+from homeassistant.helpers.storage import Store
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
 
 from .calculations import (
     calculate_charging_time,
     calculate_iog_target_percent,
     calculate_required_energy,
+    resolve_plug_state,
     select_active_vehicle,
 )
 from .const import (
@@ -70,6 +81,10 @@ from .const import (
 
 _LOGGER = logging.getLogger(__name__)
 
+# Session state persistence
+STORAGE_VERSION = 1
+SESSION_SAVE_DELAY_SECONDS = 5
+
 
 def _safe_float(value: Any, fallback: float | None = None) -> float | None:
     if value in (None, "unknown", "unavailable", ""):
@@ -80,16 +95,10 @@ def _safe_float(value: Any, fallback: float | None = None) -> float | None:
         return fallback
 
 
-def _is_truthy(state: str | None) -> bool:
-    if state is None:
-        return False
-    return state.lower() in ("on", "true", "yes", "1", "home", "connected", "charging")
-
-
 class OctopusIOGCoordinator(DataUpdateCoordinator):
     """Coordinator implementing the plug-in state machine."""
 
-    def __init__(self, hass: HomeAssistant, config_data: dict) -> None:
+    def __init__(self, hass: HomeAssistant, config_data: dict, entry_id: str) -> None:
         super().__init__(
             hass,
             _LOGGER,
@@ -97,6 +106,13 @@ class OctopusIOGCoordinator(DataUpdateCoordinator):
             update_interval=timedelta(seconds=SCAN_INTERVAL_SECONDS),
         )
         self._config = config_data
+        self._entry_id = entry_id
+
+        # Session state survives restarts, upgrades and config reloads so that a
+        # car already in TARGET_SET does not get its target rewritten.
+        self._store: Store = Store(
+            hass, STORAGE_VERSION, f"{DOMAIN}.{entry_id}.sessions"
+        )
 
         # State machine — keyed by vehicle name
         self._vehicle_states: dict[str, dict] = {}
@@ -116,10 +132,72 @@ class OctopusIOGCoordinator(DataUpdateCoordinator):
         self._last_calculated_target: int | None = None
         self._last_calculation: dict | None = None
         self._last_active_vehicle: dict | None = None
-        self._last_written_target: int | None = None
+        self._last_written_target: dict[str, int] = {}
 
         # Cached BCD Octopus target entity id (discovered by pattern match)
         self._resolved_target_entity: str | None = None
+
+    # ------------------------------------------------------------------
+    # Session persistence
+    # ------------------------------------------------------------------
+
+    async def async_load_session_state(self) -> None:
+        """
+        Restore per-vehicle session state saved before the last shutdown.
+
+        Without this, every restart, upgrade or config reload starts from IDLE
+        and re-writes the charge target for a car that is already plugged in and
+        already sorted. Called once during setup, before the first refresh.
+        """
+        try:
+            data = await self._store.async_load()
+        except Exception:  # pragma: no cover - corrupt store shouldn't block setup
+            _LOGGER.warning("Could not read saved session state — starting fresh", exc_info=True)
+            return
+
+        if not data:
+            _LOGGER.debug("No saved session state — starting fresh")
+            return
+
+        for name, vs in (data.get("vehicles") or {}).items():
+            detected_raw = vs.get("plug_detected_at")
+            detected = dt_util.parse_datetime(detected_raw) if detected_raw else None
+            self._vehicle_states[name] = {
+                "state": vs.get("state", STATE_IDLE),
+                "plug_detected_at": detected,
+            }
+            written = vs.get("last_written_target")
+            if written is not None:
+                self._last_written_target[name] = written
+            _LOGGER.debug(
+                "Restored '%s': state=%s last_written=%s",
+                name, vs.get("state"), written,
+            )
+
+    @callback
+    def _session_payload(self) -> dict:
+        """Build the JSON-serialisable session snapshot for the store."""
+        vehicles = {}
+        for name, vs in self._vehicle_states.items():
+            detected = vs.get("plug_detected_at")
+            vehicles[name] = {
+                "state": vs.get("state", STATE_IDLE),
+                "plug_detected_at": detected.isoformat() if detected else None,
+                "last_written_target": self._last_written_target.get(name),
+            }
+        return {"vehicles": vehicles}
+
+    @callback
+    def _schedule_session_save(self) -> None:
+        """Queue a debounced save — state changes are infrequent but bursty."""
+        self._store.async_delay_save(self._session_payload, SESSION_SAVE_DELAY_SECONDS)
+
+    async def async_save_session_state_now(self) -> None:
+        """Write the session snapshot immediately (used on unload/reload)."""
+        try:
+            await self._store.async_save(self._session_payload())
+        except Exception:  # pragma: no cover - never block teardown
+            _LOGGER.warning("Could not save session state", exc_info=True)
 
         # Per-vehicle computed results { name: {"target": int, "calc": dict} }
         # Continuously refreshed for sensor-SoC vehicles; refreshed on button
@@ -245,39 +323,53 @@ class OctopusIOGCoordinator(DataUpdateCoordinator):
     # ------------------------------------------------------------------
 
     def _soc_is_manual(self, vehicle_name: str) -> bool:
-        """True if SoC for this vehicle comes from manual entry."""
+        """
+        True if this vehicle's SoC comes from manual entry — i.e. no SoC sensor
+        is configured.
+
+        This is deliberately config-based, not based on whether the sensor
+        happens to be available right now. A vehicle with a configured-but-
+        currently-unavailable sensor is NOT a manual vehicle: its SoC resolves
+        to None and we wait for a real reading rather than writing a target from
+        a manual number the user may never have set.
+        """
         vcfg = self._vehicle_config(vehicle_name)
         if not vcfg:
             return True
-        soc_entity = vcfg.get(CONF_VEHICLE_SOC_SENSOR)
-        if not soc_entity:
-            return True
-        # Sensor configured — manual only if sensor is currently unavailable
-        return _safe_float(self._get_state(soc_entity)) is None
+        return not vcfg.get(CONF_VEHICLE_SOC_SENSOR)
 
     def _resolve_soc(self, vehicle_name: str) -> tuple[float | None, str]:
-        """Return (soc, source) where source is 'sensor' or 'manual'."""
+        """
+        Return (soc, source) where source is 'sensor', 'sensor_unavailable' or
+        'manual'.
+
+        If a SoC sensor is configured but currently unavailable we return None
+        rather than substituting the manual value. Silently falling back means a
+        sensor dropout can produce a charge target computed from a number the
+        user never entered — callers must refuse to write on None.
+        """
         vcfg = self._vehicle_config(vehicle_name)
         soc_entity = vcfg.get(CONF_VEHICLE_SOC_SENSOR) if vcfg else None
         if soc_entity:
             sensor_soc = _safe_float(self._get_state(soc_entity))
             if sensor_soc is not None:
                 return sensor_soc, "sensor"
+            return None, "sensor_unavailable"
         return self._manual_soc.get(vehicle_name, DEFAULT_MANUAL_SOC_PERCENT), "manual"
 
-    def _resolve_plugged_in(self, vehicle_name: str) -> bool:
+    def _resolve_plugged_in(self, vehicle_name: str) -> bool | None:
         """
-        Plug sensor if configured, else the manual switch.
+        Return True / False / None, where None means *unknown*.
 
-        Special case: a single configured vehicle with no plug sensor has
-        nothing to disambiguate against, so it is treated as always connected.
-        The Recalculate button is the trigger for writes in that mode (the
-        manual plug switch is hidden until a second vehicle is added).
+        Plug sensor if configured; otherwise a lone vehicle is treated as always
+        connected (nothing to disambiguate against), else the manual switch.
+        Unknown only ever comes from an unavailable or unrecognised sensor, and
+        holds the current state rather than resetting the session.
         """
         vcfg = self._vehicle_config(vehicle_name)
         plug_entity = vcfg.get(CONF_VEHICLE_PLUG_SENSOR) if vcfg else None
         if plug_entity:
-            return _is_truthy(self._get_state(plug_entity))
+            return resolve_plug_state(self._get_state(plug_entity))
         if len(self._config.get(CONF_VEHICLES, [])) <= 1:
             return True
         return self._manual_plugged_in.get(vehicle_name, False)
@@ -317,7 +409,7 @@ class OctopusIOGCoordinator(DataUpdateCoordinator):
         now = dt_util.utcnow()
 
         # Maintain first-seen timestamps
-        currently_plugged = [v["name"] for v in vehicles if v["plugged_in"]]
+        currently_plugged = [v["name"] for v in vehicles if v["plugged_in"] is True]
         for name in list(self._plug_seen_at.keys()):
             if name not in currently_plugged:
                 self._plug_seen_at.pop(name, None)
@@ -403,6 +495,15 @@ class OctopusIOGCoordinator(DataUpdateCoordinator):
             )
             current_state = vs["state"]
 
+            if plugged_in is None:
+                # Unknown (sensor unavailable/unrecognised). Hold whatever state
+                # we're in — treating this as an unplug would reset the session
+                # and re-write the target when the sensor comes back.
+                _LOGGER.debug(
+                    "'%s' plug state unknown — holding %s", name, current_state
+                )
+                continue
+
             if not plugged_in:
                 if current_state != STATE_IDLE:
                     _LOGGER.info("'%s' unplugged — resetting to IDLE", name)
@@ -410,7 +511,8 @@ class OctopusIOGCoordinator(DataUpdateCoordinator):
                     self._last_calculated_target = None
                     self._last_calculation = None
                     self._last_active_vehicle = None
-                    self._last_written_target = None
+                    self._last_written_target.pop(name, None)
+                    self._schedule_session_save()
                 continue
 
             if current_state == STATE_IDLE:
@@ -419,18 +521,24 @@ class OctopusIOGCoordinator(DataUpdateCoordinator):
                     name, self._stabilisation_delay_minutes(),
                 )
                 self._vehicle_states[name] = {"state": STATE_WAITING, "plug_detected_at": now}
+                self._schedule_session_save()
 
             elif current_state == STATE_WAITING:
                 detected_at = vs.get("plug_detected_at") or now
                 if (now - detected_at) >= delay:
                     if v["current_soc"] is None:
-                        _LOGGER.warning("'%s' delay elapsed but SoC unavailable — staying WAITING", name)
+                        _LOGGER.warning(
+                            "'%s' delay elapsed but SoC unavailable (%s) — staying WAITING, "
+                            "not writing a target from stale data",
+                            name, v["soc_source"],
+                        )
                     else:
                         _LOGGER.info(
                             "'%s' ready (SoC=%.0f%% via %s, desired=%.0f%%) — writing target",
                             name, v["current_soc"], v["soc_source"], v["desired_soc"],
                         )
                         self._vehicle_states[name]["state"] = STATE_TARGET_SET
+                        self._schedule_session_save()
                         vehicle_to_action = v
 
             elif current_state == STATE_TARGET_SET:
@@ -482,18 +590,21 @@ class OctopusIOGCoordinator(DataUpdateCoordinator):
         _LOGGER.debug("Resolved IOG target entity: %s", matches[0])
         return matches[0]
 
-    async def _async_write_iog_target(self, target_percent: int, dry_run: bool) -> None:
+    async def _async_write_iog_target(
+        self, vehicle_name: str, target_percent: int, dry_run: bool
+    ) -> None:
         target_entity = self._resolve_iog_target_entity()
 
         if dry_run:
             _LOGGER.info(
-                "[DRY RUN] Would set %s to %d%%",
-                target_entity or "(target entity not found)", target_percent,
+                "[DRY RUN] Would set %s to %d%% for '%s'",
+                target_entity or "(target entity not found)", target_percent, vehicle_name,
             )
-            self._last_written_target = target_percent
+            self._last_written_target[vehicle_name] = target_percent
+            self._schedule_session_save()
             return
 
-        if target_percent == self._last_written_target:
+        if target_percent == self._last_written_target.get(vehicle_name):
             return
 
         if target_entity is None:
@@ -505,14 +616,15 @@ class OctopusIOGCoordinator(DataUpdateCoordinator):
             )
             return
 
-        _LOGGER.info("Setting %s to %d%%", target_entity, target_percent)
+        _LOGGER.info("Setting %s to %d%% for '%s'", target_entity, target_percent, vehicle_name)
         await self.hass.services.async_call(
             NUMBER_DOMAIN,
             SERVICE_SET_VALUE,
             {ATTR_ENTITY_ID: target_entity, "value": target_percent},
             blocking=True,
         )
-        self._last_written_target = target_percent
+        self._last_written_target[vehicle_name] = target_percent
+        self._schedule_session_save()
 
     # ------------------------------------------------------------------
     # DataUpdateCoordinator interface
@@ -620,18 +732,22 @@ class OctopusIOGCoordinator(DataUpdateCoordinator):
                 target_percent = cache.get("target")
                 calc_details = cache.get("calc")
                 if target_percent is not None:
-                    await self._async_write_iog_target(target_percent, dry_run=dry_run)
+                    await self._async_write_iog_target(
+                        active["name"], target_percent, dry_run=dry_run
+                    )
                     self._last_calculated_target = target_percent
                     self._last_calculation = calc_details
                     self._last_active_vehicle = active
 
-            any_plugged_in = any(v["plugged_in"] for v in vehicles)
+            # `plugged_in` is tri-state — treat unknown as not-plugged for this
+            # summary only; it must never drive the state machine.
+            any_plugged_in = any(v["plugged_in"] is True for v in vehicles)
             if not any_plugged_in:
                 reason = "no_vehicle_plugged_in"
             elif vehicle_to_action is not None:
                 reason = "dry_run" if dry_run else "ok"
             else:
-                active_summary = next((v for v in vehicle_summaries if v["plugged_in"]), None)
+                active_summary = next((v for v in vehicle_summaries if v["plugged_in"] is True), None)
                 reason = active_summary.get("session_state", "idle") if active_summary else "idle"
 
             return {
