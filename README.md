@@ -61,6 +61,8 @@ Example — a 50 kWh car, 7 kW charger, 10% loss, tapering to 2.9 kW at 95%, cha
 
 ### Via HACS (custom repository)
 
+[![Open your Home Assistant instance and open a repository inside the Home Assistant Community Store.](https://my.home-assistant.io/badges/hacs_repository.svg)](https://my.home-assistant.io/redirect/hacs_repository/?owner=RGx01&repository=octopus-evse-iog-manager&category=integration)
+
 1. HACS → three-dot menu → **Custom repositories**
 2. Add `https://github.com/RGx01/octopus-evse-iog-manager` with category **Integration**
 3. Install **Octopus EVSE IOG Manager**
