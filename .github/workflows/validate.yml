@@ -11,6 +11,32 @@ on:
   workflow_dispatch:
 
 jobs:
+  tests:
+    name: Tests (Python ${{ matrix.python-version }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.12", "3.13"]
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: Install test dependencies
+        # The unit tests are deliberately free of Home Assistant imports, so
+        # there is nothing to pin against an HA release and the run stays fast.
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements-test.txt
+
+      - name: Run tests
+        run: pytest tests/ -v
+
   hassfest:
     name: Hassfest
     runs-on: ubuntu-latest

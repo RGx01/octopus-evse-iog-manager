@@ -123,12 +123,33 @@ the integration. It is multiple *chargers* that aren't.
 
 ## When does it write to Octopus?
 
-The actual Intelligent Charge Target is written **only** when all of these hold:
-- a vehicle is plugged in (a lone vehicle with no plug sensor always counts as plugged in),
-- the stabilisation delay has elapsed (skipped for manual SoC),
+The Intelligent Charge Target is written on **one transition only** — a vehicle
+reaching `TARGET_SET` — which requires all of:
+
+- the vehicle is plugged in (a lone vehicle with no plug sensor always counts as
+  plugged in),
+- the stabilisation delay has elapsed (skipped for manual-SoC vehicles),
+- a **real** SoC reading is available,
 - dry run is off.
 
-The would-be target, energy, and charging-time sensors update regardless, so you can see what it *would* do at any time — pressing Recalculate updates them even with nothing plugged in.
+Once set, the target is left alone for the rest of that charging session.
+
+Session state is **persisted**, so restarts, upgrades and config reloads restore
+the session rather than re-writing the target for a car that is already sorted.
+
+Sensor dropouts are handled conservatively:
+
+| situation | behaviour |
+|---|---|
+| Plug sensor `unavailable` / `unknown` | Plug state is *unknown* — the session is **held**, never reset, so there's no re-write when it recovers. |
+| SoC sensor `unavailable` | SoC is *unknown* — the integration **waits** rather than writing a target from a stale or default value. |
+| Genuine unplug (sensor reads `off`) | Session resets; the next plug-in starts a fresh one. |
+
+To force a fresh write at any time, press **Recalculate**.
+
+The would-be target, energy and charging-time sensors update regardless of all
+this, so you can always see what it *would* do — pressing Recalculate updates
+them even with nothing plugged in.
 
 ## Logo
 
@@ -136,6 +157,19 @@ The pink tentacle-with-a-Type-2-plug icon ships inside the integration at
 `custom_components/octopus_evse_iog_manager/brand/` and is picked up
 automatically by Home Assistant (2026.3+), appearing on the device page. The
 `kraken.svg` source sits alongside the PNGs if you want to re-render or tweak it.
+
+## Development
+
+Unit tests cover the calculation and resolution logic and need no Home Assistant
+install:
+
+```bash
+pip install -r requirements-test.txt
+pytest
+```
+
+They run automatically on every pull request, alongside hassfest and HACS
+validation.
 
 ## License
 

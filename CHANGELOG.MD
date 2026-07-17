@@ -5,6 +5,48 @@ All notable changes to this project are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.4.1] - 2026-07-17
+
+Reliability release: the charge target is no longer re-written after it has been
+set. Restarts, upgrades, config reloads and sensor dropouts previously all caused
+a spurious re-write, sometimes from stale or fabricated data.
+
+### Fixed
+- **A restart, upgrade or config reload no longer re-writes the charge target.**
+  Session state was held in memory only, so any of these started again from IDLE
+  and wrote the target a second time for a car that was already sorted. Per-vehicle
+  session state (state, plug-detected time, last written target) is now persisted
+  and restored on setup.
+- **A plug sensor dropout is no longer mistaken for an unplug.** Plug state is now
+  tri-state: `True`, `False`, or **unknown** when the sensor is `unavailable`,
+  `unknown`, missing or unrecognised. Unknown holds the current state instead of
+  resetting the session, so a blip no longer causes a re-write on recovery.
+- **The charge target is never written from a fabricated SoC.** When a vehicle has
+  a SoC sensor that is currently unavailable, its SoC now resolves to *unknown*
+  rather than silently falling back to the manual value (which defaulted to 50%).
+  Previously a dropout during the stabilisation window could write a target
+  computed from that 50% — e.g. a car at 80% wanting 100% would have written 57%
+  instead of 20%, scheduling roughly triple the energy. The existing
+  "SoC unavailable — staying WAITING" guard could never fire; it now does.
+- `last_written_target` is tracked **per vehicle** rather than as a single shared
+  value.
+
+### Internal
+- **A test suite now runs on every pull request.** 56 unit tests covering the
+  charging-time model, target/energy calculations, active-vehicle selection and
+  the new tri-state plug resolution, alongside the existing hassfest and HACS
+  checks. The tests are deliberately free of Home Assistant imports, so they need
+  no pinned HA install and the suite runs in well under a second.
+- `resolve_plug_state()` moved from `coordinator.py` into the pure
+  `calculations.py` module so it can be unit tested without Home Assistant.
+
+### Notes
+- Upgrading to 1.4.1 starts with no saved session state, so a car that is already
+  plugged in gets one final re-write on the first run. Subsequent restarts won't.
+- If you unplug, drive and re-plug entirely while Home Assistant is down, the
+  restored session still reads TARGET_SET and the target will be stale — press
+  **Recalculate** to refresh it.
+
 ## [1.4.0] - 2026-07-16
 
 ### Fixed
@@ -134,6 +176,7 @@ First public release.
 - Home Assistant 2026.3 or newer.
 - The Octopus Energy integration on an active Intelligent Go tariff.
 
+[1.4.1]: https://github.com/RGx01/octopus-evse-iog-manager/releases/tag/v1.4.1
 [1.4.0]: https://github.com/RGx01/octopus-evse-iog-manager/releases/tag/v1.4.0
 [1.3.2]: https://github.com/RGx01/octopus-evse-iog-manager/releases/tag/v1.3.2
 [1.3.1]: https://github.com/RGx01/octopus-evse-iog-manager/releases/tag/v1.3.1
