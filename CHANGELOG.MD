@@ -5,6 +5,16 @@ All notable changes to this project are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.4.2] - 2026-07-17
+
+### Fixed
+- **1.4.1 failed to set up.** That release shipped the updated `coordinator.py`
+  alongside the previous `__init__.py`, which didn't pass the new `entry_id`
+  argument, so setup raised
+  `TypeError: OctopusIOGCoordinator.__init__() missing 1 required positional argument: 'entry_id'`
+  and the integration never loaded. No functional change beyond pairing the two
+  files correctly — if you are on 1.4.0, upgrade straight to 1.4.2 and skip 1.4.1.
+
 ## [1.4.1] - 2026-07-17
 
 Reliability release: the charge target is no longer re-written after it has been
@@ -176,6 +186,7 @@ First public release.
 - Home Assistant 2026.3 or newer.
 - The Octopus Energy integration on an active Intelligent Go tariff.
 
+[1.4.2]: https://github.com/RGx01/octopus-evse-iog-manager/releases/tag/v1.4.2
 [1.4.1]: https://github.com/RGx01/octopus-evse-iog-manager/releases/tag/v1.4.1
 [1.4.0]: https://github.com/RGx01/octopus-evse-iog-manager/releases/tag/v1.4.0
 [1.3.2]: https://github.com/RGx01/octopus-evse-iog-manager/releases/tag/v1.3.2
